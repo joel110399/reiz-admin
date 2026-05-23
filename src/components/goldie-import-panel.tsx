@@ -73,21 +73,31 @@ const STAT_LABELS: Record<string, string> = {
   time_blocks_skipped_mapped: "Bloqueos omitidos",
 };
 
+const EMPTY_PHASE: PhaseInfo = {
+  file_uploaded: false,
+  total_rows: 0,
+  next_offset: 0,
+  processed_rows: 0,
+  completed: false,
+  percent: 0,
+  can_resume: false,
+};
+
 const PHASE_META = {
   services: {
     title: "1. Servicios",
     fileLabel: "Services.csv",
-    uploadHint: "Sube solo el CSV de servicios.",
+    uploadHint: "Paso 1: elige el archivo y pulsa «Subir CSV», luego «Importar».",
   },
   clients: {
     title: "2. Clientes",
     fileLabel: "Clients.csv",
-    uploadHint: "Sube solo el CSV de clientes.",
+    uploadHint: "Paso 2: cuando termines servicios, sube Clients.csv aquí.",
   },
   appointments: {
     title: "3. Citas",
     fileLabel: "Appointments.csv",
-    uploadHint: "Sube solo el CSV de citas.",
+    uploadHint: "Paso 3: cuando termines clientes, sube Appointments.csv aquí.",
   },
 } as const;
 
@@ -234,26 +244,43 @@ function PhaseCard({
         />
       ) : null}
 
-      {!phase.file_uploaded || !isDone ? (
-        <div className="space-y-2">
-          <Label>{meta.fileLabel}</Label>
-          <p className="text-muted-foreground text-xs">{meta.uploadHint}</p>
+      {!isDone ? (
+        <div className="border-muted-foreground/30 space-y-3 rounded-lg border border-dashed bg-muted/20 p-4">
+          <div>
+            <Label className="text-base">{meta.fileLabel}</Label>
+            <p className="text-muted-foreground mt-1 text-xs">{meta.uploadHint}</p>
+          </div>
           <input
             type="file"
             accept=".csv,text/csv"
             disabled={busy}
-            className="border-input file:bg-muted w-full rounded-md border text-sm file:mr-2 file:rounded file:border-0 file:px-2 file:py-1"
+            className="border-input file:bg-primary file:text-primary-foreground w-full cursor-pointer rounded-md border-2 bg-background text-sm file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:font-medium"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={!file || busy}
-            onClick={() => file && onUpload(phaseKey, file)}
-          >
-            Subir CSV
-          </Button>
+          {file ? (
+            <p className="text-muted-foreground text-xs">
+              Archivo seleccionado: <span className="text-foreground">{file.name}</span>
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!file || busy}
+              onClick={() => file && onUpload(phaseKey, file)}
+            >
+              Subir CSV
+            </Button>
+            {phase.file_uploaded ? (
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={() => onImportBatches(phaseKey)}
+              >
+                {phase.can_resume ? "Continuar importación" : "Importar"}
+              </Button>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -295,17 +322,7 @@ function PhaseCard({
         </div>
       ) : null}
 
-      {phase.file_uploaded && !isDone ? (
-        <Button
-          type="button"
-          disabled={busy}
-          onClick={() => onImportBatches(phaseKey)}
-        >
-          {phase.can_resume ? "Continuar importación" : "Importar"}
-        </Button>
-      ) : null}
-
-      {phase.can_resume && !busy ? (
+      {phase.can_resume && !busy && phase.file_uploaded && !isDone ? (
         <p className="text-muted-foreground text-xs">
           Puedes reanudar: el progreso guardado continúa en la fila{" "}
           {phase.next_offset + 1}. Si vuelves a subir el CSV, reinicias esta fase.
@@ -489,6 +506,19 @@ export function GoldieImportPanel({
     toast.success("Nueva sesión de importación");
   };
 
+  const displayStatus: SessionStatus = status ?? {
+    session_id: sessionId ?? "",
+    business_id: businessId,
+    current_step: "services",
+    staff_mapping: {},
+    staff_detected: [],
+    batch_sizes: { services: 20, clients: 200, appointments: 500 },
+    services: { ...EMPTY_PHASE },
+    clients: { ...EMPTY_PHASE },
+    appointments: { ...EMPTY_PHASE },
+    cumulative_stats: {},
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -499,16 +529,17 @@ export function GoldieImportPanel({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        <div className="bg-muted/30 rounded-lg border px-4 py-3 text-sm">
+          <p className="font-medium">Cómo funciona</p>
+          <ol className="text-muted-foreground mt-2 list-decimal space-y-1 pl-5 text-xs">
+            <li>En cada paso: elige el CSV → <strong className="text-foreground">Subir CSV</strong> → <strong className="text-foreground">Importar</strong>.</li>
+            <li>La sesión se crea sola al subir el primer archivo (no hace falta otro botón).</li>
+            <li>Si falla un lote, usa <strong className="text-foreground">Continuar importación</strong> en ese mismo paso.</li>
+          </ol>
+        </div>
+
         <div className="flex flex-wrap gap-2">
-          {!sessionId ? (
-            <Button
-              type="button"
-              disabled={busy}
-              onClick={() => runWithBusy("Iniciando…", () => ensureSession().then(() => {}))}
-            >
-              Iniciar importación
-            </Button>
-          ) : (
+          {sessionId ? (
             <Button
               type="button"
               variant="outline"
@@ -518,7 +549,7 @@ export function GoldieImportPanel({
             >
               Actualizar estado
             </Button>
-          )}
+          ) : null}
           <Button
             type="button"
             variant="ghost"
@@ -530,59 +561,52 @@ export function GoldieImportPanel({
           </Button>
         </div>
 
-        {sessionId && status ? (
-          <>
-            <StatsList
-              stats={status.cumulative_stats}
-              title="Totales acumulados en esta sesión"
-            />
-            {lastBatchStats && busy ? (
-              <StatsList stats={lastBatchStats} title="Último lote" />
-            ) : null}
+        {sessionId && Object.keys(displayStatus.cumulative_stats).length > 0 ? (
+          <StatsList
+            stats={displayStatus.cumulative_stats}
+            title="Totales acumulados en esta sesión"
+          />
+        ) : null}
+        {lastBatchStats && busy ? (
+          <StatsList stats={lastBatchStats} title="Último lote" />
+        ) : null}
 
-            <PhaseCard
-              phaseKey="services"
-              status={status}
-              teamMembers={teamMembers}
-              staffMapping={staffMapping}
-              setStaffMapping={setStaffMapping}
-              busy={busy}
-              onUpload={uploadPhase}
-              onImportBatches={importBatches}
-            />
-            <PhaseCard
-              phaseKey="clients"
-              status={status}
-              teamMembers={teamMembers}
-              staffMapping={staffMapping}
-              setStaffMapping={setStaffMapping}
-              busy={busy}
-              onUpload={uploadPhase}
-              onImportBatches={importBatches}
-            />
-            <PhaseCard
-              phaseKey="appointments"
-              status={status}
-              teamMembers={teamMembers}
-              staffMapping={staffMapping}
-              setStaffMapping={setStaffMapping}
-              busy={busy}
-              onUpload={uploadPhase}
-              onImportBatches={importBatches}
-            />
+        <PhaseCard
+          phaseKey="services"
+          status={displayStatus}
+          teamMembers={teamMembers}
+          staffMapping={staffMapping}
+          setStaffMapping={setStaffMapping}
+          busy={busy}
+          onUpload={uploadPhase}
+          onImportBatches={importBatches}
+        />
+        <PhaseCard
+          phaseKey="clients"
+          status={displayStatus}
+          teamMembers={teamMembers}
+          staffMapping={staffMapping}
+          setStaffMapping={setStaffMapping}
+          busy={busy}
+          onUpload={uploadPhase}
+          onImportBatches={importBatches}
+        />
+        <PhaseCard
+          phaseKey="appointments"
+          status={displayStatus}
+          teamMembers={teamMembers}
+          staffMapping={staffMapping}
+          setStaffMapping={setStaffMapping}
+          busy={busy}
+          onUpload={uploadPhase}
+          onImportBatches={importBatches}
+        />
 
-            {status.current_step === "done" ? (
-              <p className="text-sm font-medium text-green-700 dark:text-green-400">
-                Importación completa para esta sesión.
-              </p>
-            ) : null}
-          </>
-        ) : (
-          <p className="text-muted-foreground text-sm">
-            Pulsa &quot;Iniciar importación&quot; para crear una sesión. Si
-            recargas la página, se reanuda la sesión guardada en este navegador.
+        {displayStatus.current_step === "done" ? (
+          <p className="text-sm font-medium text-green-700 dark:text-green-400">
+            Importación completa para esta sesión.
           </p>
-        )}
+        ) : null}
 
         {busy && busyLabel ? (
           <p className="text-muted-foreground text-center text-xs">{busyLabel}</p>
