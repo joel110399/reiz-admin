@@ -20,8 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatApiErrorBody } from "@/lib/api-client";
-import { getAccessToken } from "@/lib/auth-storage";
+import { apiFetch, formatApiErrorBody } from "@/lib/api-client";
 
 type TeamMemberOption = { id: number; name: string };
 
@@ -96,12 +95,8 @@ export function GoldieImportPanel({
         mapping,
         dryRun
       );
-      const headers = new Headers();
-      const token = getAccessToken();
-      if (token) headers.set("Authorization", `Bearer ${token}`);
-      const res = await fetch("/api/bookings/goldie-import/", {
+      const res = await apiFetch("/api/bookings/goldie-import/", {
         method: "POST",
-        headers,
         body: fd,
       });
       const text = await res.text();
