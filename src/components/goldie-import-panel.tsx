@@ -232,12 +232,13 @@ export function GoldieImportPanel({
                   </span>
                   <Select
                     value={staffMapping[goldieName] ?? "_none"}
-                    onValueChange={(v) =>
+                    onValueChange={(v) => {
+                      if (!v) return;
                       setStaffMapping((prev) => ({
                         ...prev,
                         [goldieName]: v,
-                      }))
-                    }
+                      }));
+                    }}
                   >
                     <SelectTrigger className="w-full sm:max-w-[220px]">
                       <SelectValue placeholder="Sin asignar" />
