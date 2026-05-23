@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import { DetailPageHeader } from "@/components/detail-page-header";
+import { GoldieImportPanel } from "@/components/goldie-import-panel";
 import {
   Card,
   CardContent,
@@ -224,6 +225,7 @@ export default function NegocioDetailPage() {
           <TabsTrigger value="imagenes">Imágenes</TabsTrigger>
           <TabsTrigger value="onboarding">Onboarding</TabsTrigger>
           <TabsTrigger value="resenas">Reseñas</TabsTrigger>
+          <TabsTrigger value="goldie">Importar Goldie</TabsTrigger>
         </TabsList>
 
         <TabsContent value="resumen" className="space-y-4">
@@ -705,6 +707,16 @@ export default function NegocioDetailPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="goldie">
+          <GoldieImportPanel
+            businessId={biz.id}
+            teamMembers={(biz.team_members ?? []).map((m) => ({
+              id: m.id,
+              name: m.name,
+            }))}
+          />
         </TabsContent>
       </Tabs>
 
