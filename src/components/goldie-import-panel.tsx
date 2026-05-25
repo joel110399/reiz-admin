@@ -386,56 +386,73 @@ function PhaseCard({
         />
       ) : null}
 
-      {phase.file_uploaded ? (
+      {phase.file_uploaded && !isDone ? (
         <ProgressBar
           percent={phase.percent}
-          label={
-            isDone
-              ? `Importado: ${phase.processed_rows.toLocaleString()} / ${phase.total_rows.toLocaleString()} filas`
-              : `Progreso: ${phase.processed_rows.toLocaleString()} / ${phase.total_rows.toLocaleString()} filas`
-          }
+          label={`Progreso: ${phase.processed_rows.toLocaleString()} / ${phase.total_rows.toLocaleString()} filas`}
         />
       ) : null}
 
-      {!isDone ? (
-        <div className="border-muted-foreground/30 space-y-3 rounded-lg border border-dashed bg-muted/20 p-4">
-          <div>
-            <Label className="text-base">{meta.fileLabel}</Label>
-            <p className="text-muted-foreground mt-1 text-xs">{meta.uploadHint}</p>
-          </div>
-          <input
-            type="file"
-            accept=".csv,text/csv"
-            disabled={busy}
-            className="border-input file:bg-primary file:text-primary-foreground w-full cursor-pointer rounded-md border-2 bg-background text-sm file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:font-medium"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          />
-          {file ? (
-            <p className="text-muted-foreground text-xs">
-              Archivo seleccionado: <span className="text-foreground">{file.name}</span>
-            </p>
-          ) : null}
-          <div className="flex flex-wrap gap-2">
+      {isDone && phase.file_uploaded ? (
+        <p className="text-muted-foreground text-xs">
+          Importado: {phase.processed_rows.toLocaleString()} /{" "}
+          {phase.total_rows.toLocaleString()} filas. Puedes subir otro CSV abajo.
+        </p>
+      ) : null}
+
+      <div className="border-muted-foreground/30 space-y-3 rounded-lg border border-dashed bg-muted/20 p-4">
+        {isDone ? (
+          <p className="text-xs text-amber-700 dark:text-amber-400">
+            Fase completada. Sube un CSV nuevo para reiniciar el progreso de esta
+            sección (lo ya importado en Reiz no se duplica).
+          </p>
+        ) : null}
+        <div>
+          <Label className="text-base">{meta.fileLabel}</Label>
+          <p className="text-muted-foreground mt-1 text-xs">
+            {isDone
+              ? "Selecciona otro archivo o el mismo actualizado y pulsa Subir nuevo CSV."
+              : meta.uploadHint}
+          </p>
+        </div>
+        <input
+          key={`${phaseKey}-${isDone}-${phase.total_rows}`}
+          type="file"
+          accept=".csv,text/csv"
+          disabled={busy}
+          className="border-input file:bg-primary file:text-primary-foreground w-full cursor-pointer rounded-md border-2 bg-background text-sm file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:font-medium"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        />
+        {file ? (
+          <p className="text-muted-foreground text-xs">
+            Archivo seleccionado:{" "}
+            <span className="text-foreground">{file.name}</span>
+          </p>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!file || busy}
+            onClick={async () => {
+              if (!file) return;
+              await onUpload(phaseKey, file);
+              setFile(null);
+            }}
+          >
+            {isDone ? "Subir nuevo CSV" : "Subir CSV"}
+          </Button>
+          {phase.file_uploaded && !isDone ? (
             <Button
               type="button"
-              variant="secondary"
-              disabled={!file || busy}
-              onClick={() => file && onUpload(phaseKey, file)}
+              disabled={busy}
+              onClick={() => onImportBatches(phaseKey)}
             >
-              Subir CSV
+              {phase.can_resume ? "Continuar importación" : "Importar"}
             </Button>
-            {phase.file_uploaded ? (
-              <Button
-                type="button"
-                disabled={busy}
-                onClick={() => onImportBatches(phaseKey)}
-              >
-                {phase.can_resume ? "Continuar importación" : "Importar"}
-              </Button>
-            ) : null}
-          </div>
+          ) : null}
         </div>
-      ) : null}
+      </div>
 
       {phaseKey === "appointments" &&
       status.staff_detected.length > 0 &&
