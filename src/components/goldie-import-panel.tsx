@@ -23,6 +23,29 @@ import { apiFetch, apiJson, formatApiErrorBody } from "@/lib/api-client";
 
 type TeamMemberOption = { id: number; name: string };
 
+type PhoneDuplicateRow = {
+  goldie_id: string;
+  name: string;
+  phone: string;
+  email: string;
+  reason: string;
+  reason_label: string;
+  related_goldie_id?: string;
+  related_name?: string;
+};
+
+type PhoneDuplicateGroup = {
+  phone_display: string;
+  phone_digits: string;
+  canonical: {
+    goldie_id: string;
+    name: string;
+    phone: string;
+    email: string;
+  };
+  duplicates: PhoneDuplicateRow[];
+};
+
 type ClientsUploadPreview = {
   total_rows: number;
   valid_rows: number;
@@ -32,6 +55,8 @@ type ClientsUploadPreview = {
   matched_existing_contact?: number;
   duplicate_phone_in_csv?: number;
   invalid_rows?: number;
+  phone_duplicate_groups?: PhoneDuplicateGroup[];
+  phone_duplicate_groups_truncated?: boolean;
 };
 
 type AppointmentsUploadPreview = {
@@ -201,12 +226,128 @@ function isClientsPreview(p: PhaseUploadPreview): p is ClientsUploadPreview {
   return "valid_rows" in p && !("cita_rows" in p);
 }
 
+function ClientsPhoneDuplicatesTable({
+  groups,
+}: {
+  groups: PhoneDuplicateGroup[];
+}) {
+  return (
+    <div className="mt-2 max-h-72 overflow-auto rounded border bg-background/80">
+      <table className="w-full text-left text-xs">
+        <thead className="bg-muted/60 sticky top-0">
+          <tr>
+            <th className="px-2 py-1.5 font-medium">Teléfono</th>
+            <th className="px-2 py-1.5 font-medium">Cliente omitido</th>
+            <th className="px-2 py-1.5 font-medium">Id Goldie</th>
+            <th className="px-2 py-1.5 font-medium">Se usa en su lugar</th>
+            <th className="px-2 py-1.5 font-medium">Motivo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {groups.flatMap((group) =>
+            group.duplicates.map((dup) => (
+              <tr
+                key={`${group.phone_digits}-${dup.goldie_id}`}
+                className="border-t"
+              >
+                <td className="px-2 py-1.5 whitespace-nowrap">{group.phone_display}</td>
+                <td className="px-2 py-1.5">{dup.name}</td>
+                <td className="px-2 py-1.5 font-mono text-[10px]">{dup.goldie_id}</td>
+                <td className="px-2 py-1.5">
+                  {group.canonical.name}
+                  <span className="text-muted-foreground block font-mono text-[10px]">
+                    {group.canonical.goldie_id}
+                  </span>
+                </td>
+                <td className="text-muted-foreground px-2 py-1.5">
+                  {dup.reason_label}
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ClientsPhoneDuplicatesSection({
+  sessionId,
+  preview,
+}: {
+  sessionId: string;
+  preview: ClientsUploadPreview;
+}) {
+  const count = preview.duplicate_phone_in_csv ?? 0;
+  const [open, setOpen] = React.useState(false);
+  const [groups, setGroups] = React.useState<PhoneDuplicateGroup[] | null>(
+    preview.phone_duplicate_groups ?? null
+  );
+  const [loading, setLoading] = React.useState(false);
+
+  if (count === 0) return null;
+
+  const load = async () => {
+    if (groups && groups.length > 0) return;
+    setLoading(true);
+    try {
+      const data = await apiJson<{
+        phone_duplicate_groups: PhoneDuplicateGroup[];
+        phone_duplicate_groups_truncated?: boolean;
+      }>(
+        `/api/bookings/goldie-import/session/${sessionId}/clients/phone-duplicates/`
+      );
+      setGroups(data.phone_duplicate_groups);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo cargar la lista");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 border-t border-blue-200/60 pt-3 dark:border-blue-800">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-8"
+        disabled={loading}
+        onClick={async () => {
+          const next = !open;
+          setOpen(next);
+          if (next) await load();
+        }}
+      >
+        {loading
+          ? "Cargando…"
+          : open
+            ? "Ocultar lista de duplicados"
+            : `Ver ${count} duplicados por teléfono`}
+      </Button>
+      {open && groups && groups.length > 0 ? (
+        <ClientsPhoneDuplicatesTable groups={groups} />
+      ) : null}
+      {open && !loading && groups && groups.length === 0 ? (
+        <p className="text-muted-foreground mt-2 text-xs">No hay duplicados.</p>
+      ) : null}
+      {preview.phone_duplicate_groups_truncated ? (
+        <p className="text-muted-foreground mt-1 text-xs">
+          Lista truncada (máximo 200 teléfonos).
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function UploadPreviewBanner({
   phaseKey,
   preview,
+  sessionId,
 }: {
   phaseKey: "clients" | "appointments";
   preview: PhaseUploadPreview;
+  sessionId?: string;
 }) {
   if (phaseKey === "clients" && isClientsPreview(preview)) {
     return (
@@ -247,6 +388,9 @@ function UploadPreviewBanner({
           <p className="text-muted-foreground mt-1 text-xs">
             {preview.invalid_rows} filas sin Id válido (se omiten)
           </p>
+        ) : null}
+        {sessionId ? (
+          <ClientsPhoneDuplicatesSection sessionId={sessionId} preview={preview} />
         ) : null}
       </div>
     );
@@ -383,6 +527,7 @@ function PhaseCard({
         <UploadPreviewBanner
           phaseKey={phaseKey}
           preview={phase.upload_preview}
+          sessionId={status.session_id}
         />
       ) : null}
 
