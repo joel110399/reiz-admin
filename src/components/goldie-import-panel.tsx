@@ -23,6 +23,34 @@ import { apiFetch, apiJson, formatApiErrorBody } from "@/lib/api-client";
 
 type TeamMemberOption = { id: number; name: string };
 
+type ClientsUploadPreview = {
+  total_rows: number;
+  valid_rows: number;
+  existing_count: number;
+  new_count: number;
+  already_imported_goldie?: number;
+  matched_existing_contact?: number;
+  duplicate_phone_in_csv?: number;
+  invalid_rows?: number;
+};
+
+type AppointmentsUploadPreview = {
+  total_rows: number;
+  cita_rows: number;
+  existing_count: number;
+  new_count: number;
+  existing_reservas: number;
+  new_reservas: number;
+  existing_time_blocks?: number;
+  new_time_blocks?: number;
+  rows_unresolved_client?: number;
+  reservas_unresolvable_service?: number;
+  invalid_rows?: number;
+  has_clients_csv?: boolean;
+};
+
+type PhaseUploadPreview = ClientsUploadPreview | AppointmentsUploadPreview;
+
 type PhaseInfo = {
   file_uploaded: boolean;
   total_rows: number;
@@ -31,6 +59,7 @@ type PhaseInfo = {
   completed: boolean;
   percent: number;
   can_resume: boolean;
+  upload_preview?: PhaseUploadPreview | null;
 };
 
 type SessionStatus = {
@@ -85,19 +114,20 @@ const EMPTY_PHASE: PhaseInfo = {
 
 const PHASE_META = {
   services: {
-    title: "1. Servicios",
+    title: "Servicios (opcional)",
     fileLabel: "Services.csv",
-    uploadHint: "Paso 1: elige el archivo y pulsa «Subir CSV», luego «Importar».",
+    uploadHint: "Opcional si ya tienes el catálogo en Reiz. Subir CSV → Importar.",
   },
   clients: {
-    title: "2. Clientes",
+    title: "Clientes",
     fileLabel: "Clients.csv",
-    uploadHint: "Paso 2: cuando termines servicios, sube Clients.csv aquí.",
+    uploadHint: "Independiente de servicios. Subir CSV → Importar.",
   },
   appointments: {
-    title: "3. Citas",
+    title: "Citas",
     fileLabel: "Appointments.csv",
-    uploadHint: "Paso 3: cuando termines clientes, sube Appointments.csv aquí.",
+    uploadHint:
+      "Importa clientes antes (en esta u otra sesión). Servicios: CSV o los que ya existan en el negocio.",
   },
 } as const;
 
@@ -167,6 +197,128 @@ async function parseResponse(res: Response): Promise<BatchResponse> {
   return JSON.parse(text) as BatchResponse;
 }
 
+function isClientsPreview(p: PhaseUploadPreview): p is ClientsUploadPreview {
+  return "valid_rows" in p && !("cita_rows" in p);
+}
+
+function UploadPreviewBanner({
+  phaseKey,
+  preview,
+}: {
+  phaseKey: "clients" | "appointments";
+  preview: PhaseUploadPreview;
+}) {
+  if (phaseKey === "clients" && isClientsPreview(preview)) {
+    return (
+      <div className="rounded-md border border-blue-200 bg-blue-50/80 p-3 text-sm dark:border-blue-900 dark:bg-blue-950/40">
+        <p className="font-medium text-blue-900 dark:text-blue-100">
+          Resumen del CSV (antes de importar)
+        </p>
+        <ul className="mt-2 space-y-1 text-blue-800 dark:text-blue-200">
+          <li>
+            <span className="font-semibold text-green-700 dark:text-green-400">
+              {preview.new_count.toLocaleString()}
+            </span>{" "}
+            clientes nuevos
+          </li>
+          <li>
+            <span className="font-semibold text-amber-700 dark:text-amber-400">
+              {preview.existing_count.toLocaleString()}
+            </span>{" "}
+            ya existen en Reiz (no se duplicarán)
+          </li>
+        </ul>
+        {(preview.already_imported_goldie ?? 0) > 0 ||
+        (preview.matched_existing_contact ?? 0) > 0 ||
+        (preview.duplicate_phone_in_csv ?? 0) > 0 ? (
+          <p className="text-muted-foreground mt-2 text-xs">
+            {preview.already_imported_goldie
+              ? `${preview.already_imported_goldie.toLocaleString()} importados antes · `
+              : ""}
+            {preview.matched_existing_contact
+              ? `${preview.matched_existing_contact.toLocaleString()} coinciden por teléfono/email · `
+              : ""}
+            {preview.duplicate_phone_in_csv
+              ? `${preview.duplicate_phone_in_csv.toLocaleString()} teléfono duplicado en CSV`
+              : ""}
+          </p>
+        ) : null}
+        {(preview.invalid_rows ?? 0) > 0 ? (
+          <p className="text-muted-foreground mt-1 text-xs">
+            {preview.invalid_rows} filas sin Id válido (se omiten)
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  const appt = preview as AppointmentsUploadPreview;
+  return (
+    <div className="rounded-md border border-blue-200 bg-blue-50/80 p-3 text-sm dark:border-blue-900 dark:bg-blue-950/40">
+      <p className="font-medium text-blue-900 dark:text-blue-100">
+        Resumen del CSV (antes de importar)
+      </p>
+      <ul className="mt-2 space-y-1 text-blue-800 dark:text-blue-200">
+        <li>
+          <span className="font-semibold text-green-700 dark:text-green-400">
+            {appt.new_reservas.toLocaleString()}
+          </span>{" "}
+          reservas nuevas
+          {(appt.new_time_blocks ?? 0) > 0
+            ? ` · ${appt.new_time_blocks!.toLocaleString()} bloqueos nuevos`
+            : ""}
+        </li>
+        <li>
+          <span className="font-semibold text-amber-700 dark:text-amber-400">
+            {appt.existing_reservas.toLocaleString()}
+          </span>{" "}
+          reservas ya importadas
+          {(appt.existing_time_blocks ?? 0) > 0
+            ? ` · ${appt.existing_time_blocks!.toLocaleString()} bloqueos ya importados`
+            : ""}
+        </li>
+      </ul>
+      <p className="text-muted-foreground mt-2 text-xs">
+        {appt.cita_rows.toLocaleString()} filas tipo Cita en{" "}
+        {appt.total_rows.toLocaleString()} filas del CSV. Citas con varios
+        servicios generan varias reservas.
+      </p>
+      {!appt.has_clients_csv ? (
+        <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+          No hay Clients.csv en esta sesión: el conteo de clientes no resueltos
+          puede ser mayor. Sube clientes primero para un resumen más preciso.
+        </p>
+      ) : null}
+      {(appt.rows_unresolved_client ?? 0) > 0 ? (
+        <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+          {appt.rows_unresolved_client!.toLocaleString()} citas sin cliente
+          reconocido (importa clientes antes o revisa nombres).
+        </p>
+      ) : null}
+      {(appt.reservas_unresolvable_service ?? 0) > 0 ? (
+        <p className="text-muted-foreground mt-1 text-xs">
+          {appt.reservas_unresolvable_service} reservas sin servicio resoluble
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function uploadPreviewToast(
+  phase: PhaseKey,
+  preview: PhaseUploadPreview | null | undefined
+): string {
+  if (!preview) return `${PHASE_META[phase].title}: archivo guardado`;
+  if (phase === "clients" && isClientsPreview(preview)) {
+    return `Clientes: ${preview.new_count.toLocaleString()} nuevos, ${preview.existing_count.toLocaleString()} ya existen`;
+  }
+  if (phase === "appointments") {
+    const appt = preview as AppointmentsUploadPreview;
+    return `Citas: ${appt.new_reservas.toLocaleString()} reservas nuevas, ${appt.existing_reservas.toLocaleString()} ya importadas`;
+  }
+  return `${PHASE_META[phase].title}: archivo guardado`;
+}
+
 type PhaseKey = keyof typeof PHASE_META;
 
 function PhaseCard({
@@ -192,22 +344,9 @@ function PhaseCard({
   const phase = status[phaseKey];
   const isActive = status.current_step === phaseKey;
   const isDone = phase.completed;
-  const locked =
-    (phaseKey === "clients" && !status.services.completed) ||
-    (phaseKey === "appointments" && !status.clients.completed);
+  const isOptional = phaseKey === "services";
 
   const [file, setFile] = React.useState<File | null>(null);
-
-  if (locked) {
-    return (
-      <div className="rounded-lg border border-dashed p-4 opacity-60">
-        <p className="text-sm font-medium">{meta.title}</p>
-        <p className="text-muted-foreground mt-1 text-xs">
-          Completa la fase anterior para desbloquear.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div
@@ -220,6 +359,11 @@ function PhaseCard({
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium">
           {meta.title}
+          {isOptional ? (
+            <span className="text-muted-foreground ml-2 text-xs font-normal">
+              opcional
+            </span>
+          ) : null}
           {isDone ? (
             <span className="text-green-600 dark:text-green-400 ml-2 text-xs font-normal">
               Completado
@@ -232,6 +376,15 @@ function PhaseCard({
           </span>
         ) : null}
       </div>
+
+      {phase.file_uploaded &&
+      phase.upload_preview &&
+      (phaseKey === "clients" || phaseKey === "appointments") ? (
+        <UploadPreviewBanner
+          phaseKey={phaseKey}
+          preview={phase.upload_preview}
+        />
+      ) : null}
 
       {phase.file_uploaded ? (
         <ProgressBar
@@ -447,7 +600,10 @@ export function GoldieImportPanel({
       );
       const data = await parseResponse(res);
       applyStatus(data);
-      toast.success(`${PHASE_META[phase].title}: archivo guardado`);
+      const phaseInfo = data[phase];
+      toast.success(
+        uploadPreviewToast(phase, phaseInfo.upload_preview ?? undefined)
+      );
     });
   };
 
@@ -524,17 +680,18 @@ export function GoldieImportPanel({
       <CardHeader>
         <CardTitle>Importar desde Goldie</CardTitle>
         <CardDescription>
-          Orden: servicios → clientes → citas. Cada fase con su CSV, progreso en %
-          y reanudación si falla un lote (no empiezas desde cero).
+          Cada sección es independiente: usa solo clientes, solo citas, o las tres.
+          Reimportar el mismo CSV no duplica: omite lo ya importado (por ID Goldie).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="bg-muted/30 rounded-lg border px-4 py-3 text-sm">
           <p className="font-medium">Cómo funciona</p>
           <ol className="text-muted-foreground mt-2 list-decimal space-y-1 pl-5 text-xs">
-            <li>En cada paso: elige el CSV → <strong className="text-foreground">Subir CSV</strong> → <strong className="text-foreground">Importar</strong>.</li>
-            <li>La sesión se crea sola al subir el primer archivo (no hace falta otro botón).</li>
-            <li>Si falla un lote, usa <strong className="text-foreground">Continuar importación</strong> en ese mismo paso.</li>
+            <li>Cada bloque es independiente: puedes saltar servicios si ya están en Reiz.</li>
+            <li>Para citas: importa clientes antes (misma sesión u otra). Servicios del negocio o Services.csv.</li>
+            <li>Mismo archivo otra vez: <strong className="text-foreground">no duplica</strong>; suma solo filas nuevas o muestra «omitidos».</li>
+            <li>Vuelves a subir el CSV → reinicia el % de esa sección; lo ya guardado sigue omitiéndose.</li>
           </ol>
         </div>
 
