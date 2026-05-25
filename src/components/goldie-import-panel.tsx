@@ -366,7 +366,7 @@ function UploadPreviewBanner({
             <span className="font-semibold text-amber-700 dark:text-amber-400">
               {preview.existing_count.toLocaleString()}
             </span>{" "}
-            ya existen en Reiz (no se duplicarán)
+            ya existen en Reiz por teléfono (el email no define duplicados)
           </li>
         </ul>
         {(preview.already_imported_goldie ?? 0) > 0 ||
@@ -377,7 +377,7 @@ function UploadPreviewBanner({
               ? `${preview.already_imported_goldie.toLocaleString()} importados antes · `
               : ""}
             {preview.matched_existing_contact
-              ? `${preview.matched_existing_contact.toLocaleString()} coinciden por teléfono/email · `
+              ? `${preview.matched_existing_contact.toLocaleString()} coinciden por teléfono en Reiz · `
               : ""}
             {preview.duplicate_phone_in_csv
               ? `${preview.duplicate_phone_in_csv.toLocaleString()} teléfono duplicado en CSV`
@@ -852,6 +852,10 @@ export function GoldieImportPanel({
           <ol className="text-muted-foreground mt-2 list-decimal space-y-1 pl-5 text-xs">
             <li>Cada bloque es independiente: puedes saltar servicios si ya están en Reiz.</li>
             <li>Para citas: importa clientes antes (misma sesión u otra). Servicios del negocio o Services.csv.</li>
+            <li>
+              Duplicado de cliente = mismo <strong className="text-foreground">teléfono</strong>{" "}
+              (en el CSV o ya en Reiz). El correo no fusiona clientes.
+            </li>
             <li>Mismo archivo otra vez: <strong className="text-foreground">no duplica</strong>; suma solo filas nuevas o muestra «omitidos».</li>
             <li>Vuelves a subir el CSV → reinicia el % de esa sección; lo ya guardado sigue omitiéndose.</li>
           </ol>
