@@ -6,6 +6,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { ClientMergeButton } from "@/components/client-merge-dialog";
+
 import { PaginatedTable } from "@/components/paginated-table";
 import { Button } from "@/components/ui/button";
 import {
@@ -186,6 +188,11 @@ export default function ClientesPage() {
             >
               <Pencil className="size-4" />
             </Button>
+            <ClientMergeButton
+              client={row}
+              size="icon"
+              onMerged={() => invalidate()}
+            />
             <Button
               variant="ghost"
               size="icon"

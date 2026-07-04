@@ -3,8 +3,9 @@
 import * as React from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { ClientMergeButton } from "@/components/client-merge-dialog";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import {
   Card,
@@ -64,6 +65,7 @@ function businessName(
 
 export default function ClienteDetailPage() {
   const params = useParams();
+  const qc = useQueryClient();
   const id = String(params.id ?? "");
 
   const { data: client, isLoading, error } = useQuery({
@@ -123,6 +125,16 @@ export default function ClienteDetailPage() {
         backHref="/dashboard/clientes"
         title={client.name}
         description={`Cliente #${client.id} · ${client.business_name ?? `Negocio #${bid}`}`}
+        actions={
+          <ClientMergeButton
+            client={client}
+            onMerged={() => {
+              qc.invalidateQueries({ queryKey: ["client-detail", id] });
+              qc.invalidateQueries({ queryKey: ["client-bookings", id] });
+              qc.invalidateQueries({ queryKey: ["clients"] });
+            }}
+          />
+        }
       />
 
       <div className="grid gap-4 md:grid-cols-2">

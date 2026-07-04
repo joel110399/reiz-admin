@@ -1,4 +1,5 @@
 import Link from "next/link";
+import * as React from "react";
 import { ArrowLeft } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -8,6 +9,7 @@ type DetailPageHeaderProps = {
   backLabel?: string;
   title: string;
   description?: string;
+  actions?: React.ReactNode;
   className?: string;
 };
 
@@ -16,6 +18,7 @@ export function DetailPageHeader({
   backLabel = "Volver",
   title,
   description,
+  actions,
   className,
 }: DetailPageHeaderProps) {
   return (
@@ -27,12 +30,17 @@ export function DetailPageHeader({
         <ArrowLeft className="size-4" />
         {backLabel}
       </Link>
-      <h1 className="font-heading text-xl font-semibold tracking-tight md:text-2xl">
-        {title}
-      </h1>
-      {description ? (
-        <p className="text-muted-foreground max-w-3xl text-sm">{description}</p>
-      ) : null}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-heading text-xl font-semibold tracking-tight md:text-2xl">
+            {title}
+          </h1>
+          {description ? (
+            <p className="text-muted-foreground max-w-3xl text-sm">{description}</p>
+          ) : null}
+        </div>
+        {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+      </div>
     </div>
   );
 }

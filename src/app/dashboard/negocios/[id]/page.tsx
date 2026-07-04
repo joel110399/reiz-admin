@@ -3,7 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { DetailPageHeader } from "@/components/detail-page-header";
 import { GoldieImportPanel } from "@/components/goldie-import-panel";
@@ -23,7 +24,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { apiJson } from "@/lib/api-client";
+import { Button } from "@/components/ui/button";
+import { apiJson, apiFetch, formatApiErrorBody } from "@/lib/api-client";
 import { fetchAllPages } from "@/lib/drf-helpers";
 
 type OwnerDetail = {
@@ -118,6 +120,8 @@ type BusinessDetail = {
   amenities?: unknown;
   is_active?: boolean;
   onboarding_completed?: boolean;
+  pos_enabled?: boolean;
+  whatsapp_messaging_enabled?: boolean;
   business_hours?: BusinessHour[];
   services?: ServiceItem[];
   team_members?: TeamMember[];
@@ -146,6 +150,49 @@ function formatAmenities(a: unknown): string {
   if (Array.isArray(a)) return a.length ? a.join(", ") : "—";
   if (typeof a === "object") return JSON.stringify(a, null, 2);
   return String(a);
+}
+
+function PosEnabledCard({ id, posEnabled }: { id: number; posEnabled: boolean }) {
+  const qc = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: async (next: boolean) => {
+      const res = await apiFetch(`/api/businesses/${id}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ pos_enabled: next }),
+      });
+      const t = await res.text();
+      if (!res.ok) throw new Error(formatApiErrorBody(t, res.statusText));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["business-detail", String(id)] });
+      toast.success("Módulo Caja actualizado");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Módulo Caja (POS)</CardTitle>
+        <CardDescription>
+          Activa el tab Caja, cobros desde citas y reportes de ventas en Reiz Business.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex items-center justify-between gap-4">
+        <span className="text-sm font-medium">
+          {posEnabled ? "Activo para este negocio" : "Inactivo"}
+        </span>
+        <Button
+          size="sm"
+          variant={posEnabled ? "destructive" : "default"}
+          disabled={mutation.isPending}
+          onClick={() => mutation.mutate(!posEnabled)}
+        >
+          {posEnabled ? "Desactivar Caja" : "Activar Caja"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function NegocioDetailPage() {
@@ -314,6 +361,8 @@ export default function NegocioDetailPage() {
               </CardContent>
             </Card>
           </div>
+
+          <PosEnabledCard id={biz.id} posEnabled={!!biz.pos_enabled} />
 
           <Card>
             <CardHeader>

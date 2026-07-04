@@ -130,7 +130,7 @@ export default function ReservaDetailPage() {
               </span>
             </div>
             <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Walk-in</span>
+              <span className="text-muted-foreground">Sin cita</span>
               <span>{b.is_walk_in ? "Sí" : "No"}</span>
             </div>
             {b.notes ? (
