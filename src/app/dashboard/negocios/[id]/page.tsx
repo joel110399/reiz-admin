@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { DetailPageHeader } from "@/components/detail-page-header";
 import { GoldieImportPanel } from "@/components/goldie-import-panel";
+import { ServiceCategoryManager } from "@/components/service-category-manager";
 import {
   Card,
   CardContent,
@@ -477,41 +478,7 @@ export default function NegocioDetailPage() {
         </TabsContent>
 
         <TabsContent value="servicios">
-          <Card>
-            <CardHeader>
-              <CardTitle>Servicios activos</CardTitle>
-            </CardHeader>
-            <CardContent className="overflow-x-auto p-0">
-              {!biz.services?.length ? (
-                <p className="text-muted-foreground px-4 py-6 text-sm">
-                  Sin servicios.
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Precio</TableHead>
-                      <TableHead>Duración (min)</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {biz.services.map((s) => (
-                      <TableRow key={s.id}>
-                        <TableCell className="font-mono text-xs">
-                          {s.id}
-                        </TableCell>
-                        <TableCell>{s.name}</TableCell>
-                        <TableCell>{s.price ?? "—"}</TableCell>
-                        <TableCell>{s.duration_minutes ?? "—"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+          <ServiceCategoryManager businessId={biz.id} />
         </TabsContent>
 
         <TabsContent value="equipo">

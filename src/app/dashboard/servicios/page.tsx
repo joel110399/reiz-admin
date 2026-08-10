@@ -36,9 +36,15 @@ type ServiceRow = {
   price: string;
   duration_minutes: number;
   is_active: boolean;
+  category?: number | null;
+  category_detail?: { id: number; name: string } | null;
 };
 
 type BusinessOpt = { id: number; name: string };
+
+type CategoryOpt = { id: number; business: number; name: string };
+
+const UNCATEGORIZED = "__none__";
 
 export default function ServiciosPage() {
   const qc = useQueryClient();
@@ -50,6 +56,7 @@ export default function ServiciosPage() {
   const [price, setPrice] = React.useState("");
   const [duration, setDuration] = React.useState("");
   const [isActive, setIsActive] = React.useState("true");
+  const [categoryId, setCategoryId] = React.useState(UNCATEGORIZED);
 
   const { data: businesses = [] } = useQuery({
     queryKey: ["businesses-all"],
@@ -57,7 +64,27 @@ export default function ServiciosPage() {
     enabled: open,
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["services"] });
+  const categoryBusinessId = Number(businessId) || 0;
+  const { data: categories = [] } = useQuery({
+    queryKey: ["service-categories", categoryBusinessId],
+    queryFn: () =>
+      fetchAllPages<CategoryOpt>(
+        `/api/service-categories/?business=${categoryBusinessId}`
+      ),
+    enabled: open && categoryBusinessId > 0,
+  });
+
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: ["services"] });
+    if (categoryBusinessId > 0) {
+      void qc.invalidateQueries({
+        queryKey: ["business-services-catalog", categoryBusinessId],
+      });
+      void qc.invalidateQueries({
+        queryKey: ["business-detail", String(categoryBusinessId)],
+      });
+    }
+  };
 
   React.useEffect(() => {
     if (open && editing) {
@@ -67,6 +94,8 @@ export default function ServiciosPage() {
       setPrice(String(editing.price));
       setDuration(String(editing.duration_minutes));
       setIsActive(editing.is_active ? "true" : "false");
+      const cat = editing.category ?? editing.category_detail?.id ?? null;
+      setCategoryId(cat != null ? String(cat) : UNCATEGORIZED);
     } else if (open && !editing) {
       setBusinessId("");
       setName("");
@@ -74,8 +103,18 @@ export default function ServiciosPage() {
       setPrice("");
       setDuration("30");
       setIsActive("true");
+      setCategoryId(UNCATEGORIZED);
     }
   }, [open, editing]);
+
+  React.useEffect(() => {
+    if (!open || !categoryBusinessId) return;
+    if (categoryId === UNCATEGORIZED) return;
+    const stillValid = categories.some((c) => String(c.id) === categoryId);
+    if (categories.length > 0 && !stillValid) {
+      setCategoryId(UNCATEGORIZED);
+    }
+  }, [open, categoryBusinessId, categories, categoryId]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -92,6 +131,10 @@ export default function ServiciosPage() {
         price: Number(pr.toFixed(2)),
         duration_minutes: dur,
         is_active: isActive === "true",
+        category:
+          categoryId === UNCATEGORIZED || !categoryId
+            ? null
+            : Number(categoryId),
       };
       if (editing) {
         const res = await apiFetch(`/api/services/${editing.id}/`, {
@@ -171,6 +214,11 @@ export default function ServiciosPage() {
             render: (r) => String(r.duration_minutes ?? ""),
           },
           {
+            key: "category",
+            header: "Categoría",
+            render: (r) => r.category_detail?.name ?? "—",
+          },
+          {
             key: "active",
             header: "Activo",
             render: (r) => (r.is_active ? "Sí" : "No"),
@@ -219,7 +267,10 @@ export default function ServiciosPage() {
               <Label>Negocio</Label>
               <Select
                 value={businessId}
-                onValueChange={(v) => setBusinessId(v ?? "")}
+                onValueChange={(v) => {
+                  setBusinessId(v ?? "");
+                  setCategoryId(UNCATEGORIZED);
+                }}
                 disabled={!!editing}
               >
                 <SelectTrigger>
@@ -233,6 +284,36 @@ export default function ServiciosPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Categoría del menú</Label>
+              <Select
+                value={categoryId}
+                onValueChange={(v) => setCategoryId(v ?? UNCATEGORIZED)}
+                disabled={!categoryBusinessId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sin categoría" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UNCATEGORIZED}>Sin categoría</SelectItem>
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!categoryBusinessId ? (
+                <p className="text-muted-foreground text-xs">
+                  Elige un negocio para ver sus categorías.
+                </p>
+              ) : categories.length === 0 ? (
+                <p className="text-muted-foreground text-xs">
+                  Este negocio no tiene categorías. Créalas en Negocios →
+                  Servicios.
+                </p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label>Nombre</Label>
