@@ -9,6 +9,7 @@ import {
   Heart,
   LayoutDashboard,
   LogOut,
+  MessageCircle,
   Search,
   Smartphone,
   Star,
@@ -54,6 +55,7 @@ const nav = [
   { href: "/dashboard/equipo", label: "Equipo", icon: Briefcase },
   { href: "/dashboard/favoritos", label: "Favoritos", icon: Heart },
   { href: "/dashboard/notificaciones", label: "Notificaciones", icon: Bell },
+  { href: "/dashboard/evolution", label: "WhatsApp Evolution", icon: MessageCircle },
   { href: "/dashboard/tokens", label: "Device tokens", icon: Smartphone },
 ];
 
