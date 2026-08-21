@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { toast } from "sonner";
 import {
   Activity,
   ChevronLeft,
@@ -13,6 +14,7 @@ import {
   MessageCircle,
   RefreshCw,
   Server,
+  Unplug,
   Wifi,
 } from "lucide-react";
 
@@ -237,11 +239,40 @@ export default function EvolutionOpsPage() {
     });
   const [selected, setSelected] = React.useState<InstanceRow | null>(null);
   const [openFilter, setOpenFilter] = React.useState<MessageFilter>("all");
+  const [confirmClose, setConfirmClose] = React.useState(false);
 
   function openInstance(row: InstanceRow, filter: MessageFilter = "all") {
     setOpenFilter(filter);
+    setConfirmClose(false);
     setSelected(row);
   }
+
+  const disconnectMutation = useMutation({
+    mutationFn: (row: InstanceRow) =>
+      apiJson<{ detail: string }>(
+        "/api/notifications/staff/evolution-ops/disconnect/",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            business_id: row.business_id,
+            instance: row.instance,
+          }),
+        }
+      ),
+    onSuccess: (payload) => {
+      toast.success(payload.detail || "Conexión cerrada");
+      setConfirmClose(false);
+      setSelected(null);
+      void refetch();
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const canDisconnect = Boolean(
+    selected &&
+      (selected.instance ||
+        (selected.business_id && selected.connect_status !== "idle"))
+  );
 
   if (isLoading) {
     return (
@@ -700,7 +731,10 @@ export default function EvolutionOpsPage() {
       <Sheet
         open={selected != null}
         onOpenChange={(open) => {
-          if (!open) setSelected(null);
+          if (!open) {
+            setSelected(null);
+            setConfirmClose(false);
+          }
         }}
       >
         <SheetContent
@@ -762,6 +796,49 @@ export default function EvolutionOpsPage() {
                       Código de vinculación:{" "}
                       <span className="font-mono">{selected.pairing_code}</span>
                     </p>
+                  ) : null}
+                  {canDisconnect && !confirmClose ? (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => setConfirmClose(true)}
+                    >
+                      <Unplug className="size-3.5" />
+                      Cerrar conexión
+                    </Button>
+                  ) : null}
+                  {canDisconnect && confirmClose ? (
+                    <div className="mt-3 space-y-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-3">
+                      <p className="text-sm leading-snug">
+                        {selected.business_id
+                          ? "Esto cierra el WhatsApp en Evolution y lo desvincula del negocio. El dueño tendrá que volver a conectar el número."
+                          : "Esto elimina la instancia huérfana del servidor Evolution."}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={disconnectMutation.isPending}
+                          onClick={() => setConfirmClose(false)}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          disabled={disconnectMutation.isPending}
+                          onClick={() => disconnectMutation.mutate(selected)}
+                        >
+                          {disconnectMutation.isPending
+                            ? "Cerrando…"
+                            : "Sí, cerrar"}
+                        </Button>
+                      </div>
+                    </div>
                   ) : null}
                 </div>
 
