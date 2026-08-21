@@ -2,10 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   Activity,
+  ChevronLeft,
+  ChevronRight,
   Cpu,
   HardDrive,
   MessageCircle,
@@ -40,7 +42,42 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import type { Paginated } from "@/types/drf";
+
+type MessageStatus = "sent" | "failed" | "skipped";
+type MessageFilter = "all" | MessageStatus;
+
+type FailureRow = {
+  id: number;
+  template_key: string;
+  template_label: string;
+  recipient_name: string;
+  recipient_phone: string;
+  error_message: string;
+  body_preview: string;
+  created_at: string | null;
+  trigger: string;
+  provider: string;
+};
+
+type MessageRow = FailureRow & {
+  body: string;
+  sent_at: string | null;
+  status: MessageStatus;
+  direction: string;
+};
+
+type MessagesPayload = Paginated<MessageRow> & {
+  counts: { all: number; sent: number; failed: number; skipped: number };
+};
 
 type InstanceRow = {
   business_id: number | null;
@@ -61,6 +98,7 @@ type InstanceRow = {
   sent_7d: number;
   failed_24h: number;
   last_sent_at: string | null;
+  recent_failures?: FailureRow[];
 };
 
 type SeriesPoint = { ts: number; value: number };
@@ -110,6 +148,14 @@ type OpsPayload = {
   };
 };
 
+const PAGE_SIZE = 20;
+
+const LOG_STATUS_LABEL: Record<MessageStatus, string> = {
+  sent: "Enviado",
+  failed: "Fallido",
+  skipped: "Omitido",
+};
+
 const CONNECT_LABEL: Record<string, string> = {
   connected: "Conectado",
   waiting: "Esperando código",
@@ -155,6 +201,32 @@ function chartRows(points: SeriesPoint[]) {
   }));
 }
 
+function instanceTitle(row: InstanceRow) {
+  return row.business_name || row.instance || "Instancia";
+}
+
+function connectionIssue(row: InstanceRow): string | null {
+  if (row.connect_status === "orphan") {
+    return "Existe en Evolution pero no está ligada a un negocio en Reiz.";
+  }
+  if (row.in_reiz && !row.in_evolution) {
+    return "Está en Reiz pero no aparece en el servidor Evolution.";
+  }
+  if (row.connect_status === "waiting") {
+    return "Pidió el código de vinculación y todavía no conectó el WhatsApp.";
+  }
+  if (row.connect_status === "preparing") {
+    return "La instancia se está creando o reiniciando.";
+  }
+  if (row.connect_status === "idle") {
+    return "No hay un WhatsApp vinculado.";
+  }
+  if (row.evolution_state === "close") {
+    return "El socket de WhatsApp está cerrado. Hay que volver a conectar el número.";
+  }
+  return null;
+}
+
 export default function EvolutionOpsPage() {
   const { data, isLoading, error, refetch, isFetching, dataUpdatedAt } =
     useQuery({
@@ -163,6 +235,13 @@ export default function EvolutionOpsPage() {
         apiJson<OpsPayload>("/api/notifications/staff/evolution-ops/"),
       refetchInterval: 30_000,
     });
+  const [selected, setSelected] = React.useState<InstanceRow | null>(null);
+  const [openFilter, setOpenFilter] = React.useState<MessageFilter>("all");
+
+  function openInstance(row: InstanceRow, filter: MessageFilter = "all") {
+    setOpenFilter(filter);
+    setSelected(row);
+  }
 
   if (isLoading) {
     return (
@@ -198,6 +277,8 @@ export default function EvolutionOpsPage() {
   const metrics = digitalocean.metrics;
   const cpuRows = chartRows(digitalocean.series.cpu);
   const memRows = chartRows(digitalocean.series.memory);
+  const failedInstances = evolution.instances.filter((row) => row.failed_24h > 0);
+  const totalFailed = failedInstances.reduce((sum, row) => sum + row.failed_24h, 0);
 
   return (
     <div className="space-y-8">
@@ -275,12 +356,66 @@ export default function EvolutionOpsPage() {
         </Card>
       ) : null}
 
+      {totalFailed > 0 ? (
+        <Card className="border-destructive/30">
+          <CardHeader>
+            <CardTitle>
+              {totalFailed === 1
+                ? "1 mensaje no salió en las últimas 24 h"
+                : `${totalFailed} mensajes no salieron en las últimas 24 h`}
+            </CardTitle>
+            <CardDescription>
+              Pulsa un negocio para ver el desglose y el motivo de cada fallo.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {failedInstances.map((row) => {
+              const last = (row.recent_failures ?? [])[0];
+              return (
+                <button
+                  key={`${row.instance}-${row.business_id ?? "x"}-fail`}
+                  type="button"
+                  onClick={() => openInstance(row, "failed")}
+                  className="w-full rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-3 text-left transition hover:bg-destructive/10"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="font-medium">{instanceTitle(row)}</p>
+                    <p className="text-destructive text-xs font-medium">
+                      {row.failed_24h === 1
+                        ? "1 fallo"
+                        : `${row.failed_24h} fallos`}
+                    </p>
+                  </div>
+                  {last ? (
+                    <div className="mt-1.5 space-y-1">
+                      <p className="text-muted-foreground text-xs">
+                        {last.template_label}
+                        {last.recipient_name || last.recipient_phone
+                          ? ` → ${[last.recipient_name, last.recipient_phone]
+                              .filter(Boolean)
+                              .join(" · ")}`
+                          : null}
+                        {last.created_at ? ` · ${fmtWhen(last.created_at)}` : null}
+                      </p>
+                      <p className="text-destructive text-sm leading-snug">
+                        {last.error_message}
+                      </p>
+                    </div>
+                  ) : null}
+                </button>
+              );
+            })}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Números conectados</CardTitle>
           <CardDescription>
-            Combina lo guardado en Reiz con el estado live de Evolution. Las
-            huérfanas existen en el servidor y no en un negocio.
+            Combina lo guardado en Reiz con el estado live de Evolution. Pulsa
+            una fila para ver todos los mensajes; en Fallos 24 h ves el motivo.
+            Las huérfanas existen en el servidor y no en un negocio.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -304,14 +439,22 @@ export default function EvolutionOpsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {evolution.instances.map((row) => (
-                  <TableRow key={`${row.instance}-${row.business_id ?? "x"}`}>
+                {evolution.instances.map((row) => {
+                  const issue = connectionIssue(row);
+                  const lastFail = (row.recent_failures ?? [])[0];
+                  return (
+                  <TableRow
+                    key={`${row.instance}-${row.business_id ?? "x"}`}
+                    className="cursor-pointer"
+                    onClick={() => openInstance(row)}
+                  >
                     <TableCell>
                       {row.business_id ? (
                         <div className="min-w-40">
                           <Link
                             href={`/dashboard/negocios/${row.business_id}`}
                             className="font-medium hover:underline"
+                            onClick={(event) => event.stopPropagation()}
                           >
                             {row.business_name || `Negocio ${row.business_id}`}
                           </Link>
@@ -363,9 +506,9 @@ export default function EvolutionOpsPage() {
                             row.evolution_state ||
                             "Sin dato"}
                         </Badge>
-                        {!row.in_evolution && evolution.reachable ? (
-                          <span className="text-destructive text-[11px]">
-                            No está en Evolution
+                        {issue ? (
+                          <span className="text-destructive max-w-40 text-[11px] leading-snug">
+                            {issue}
                           </span>
                         ) : null}
                       </div>
@@ -374,17 +517,36 @@ export default function EvolutionOpsPage() {
                     <TableCell className="tabular-nums">{row.sent_7d}</TableCell>
                     <TableCell
                       className={cn(
-                        "tabular-nums",
-                        row.failed_24h > 0 && "text-destructive"
+                        "max-w-48",
+                        row.failed_24h > 0 && "cursor-pointer text-destructive"
                       )}
+                      onClick={(event) => {
+                        if (row.failed_24h > 0) {
+                          event.stopPropagation();
+                          openInstance(row, "failed");
+                        }
+                      }}
                     >
-                      {row.failed_24h}
+                      <p
+                        className={cn(
+                          "tabular-nums font-medium",
+                          row.failed_24h > 0 && "underline-offset-2 hover:underline"
+                        )}
+                      >
+                        {row.failed_24h}
+                      </p>
+                      {lastFail ? (
+                        <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug">
+                          {lastFail.error_message}
+                        </p>
+                      ) : null}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">
                       {fmtWhen(row.last_sent_at)}
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           )}
@@ -534,6 +696,123 @@ export default function EvolutionOpsPage() {
           </CardContent>
         </Card>
       </section>
+
+      <Sheet
+        open={selected != null}
+        onOpenChange={(open) => {
+          if (!open) setSelected(null);
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="data-[side=right]:sm:max-w-xl overflow-y-auto"
+        >
+          {selected ? (
+            <>
+              <SheetHeader>
+                <SheetTitle>{instanceTitle(selected)}</SheetTitle>
+                <SheetDescription>
+                  {selected.instance || "Sin instancia"}
+                  {selected.phone ? ` · ${selected.phone}` : ""}
+                  {selected.owner_email ? ` · ${selected.owner_email}` : ""}
+                </SheetDescription>
+              </SheetHeader>
+              <div className="space-y-5 px-4 pb-6">
+                <div className="space-y-2">
+                  <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
+                    Conexión
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge
+                      variant={
+                        selected.connect_status === "connected"
+                          ? "default"
+                          : selected.connect_status === "orphan"
+                            ? "destructive"
+                            : "secondary"
+                      }
+                    >
+                      {CONNECT_LABEL[selected.connect_status] ??
+                        selected.connect_status}
+                    </Badge>
+                    <Badge
+                      variant={
+                        selected.evolution_state === "open" ||
+                        selected.evolution_state === "connected"
+                          ? "default"
+                          : "outline"
+                      }
+                    >
+                      {STATE_LABEL[selected.evolution_state] ||
+                        selected.evolution_state ||
+                        "Sin dato"}
+                    </Badge>
+                  </div>
+                  {connectionIssue(selected) ? (
+                    <p className="text-destructive text-sm leading-snug">
+                      {connectionIssue(selected)}
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">
+                      Socket abierto y vinculado en Reiz.
+                    </p>
+                  )}
+                  {selected.pairing_code ? (
+                    <p className="text-xs">
+                      Código de vinculación:{" "}
+                      <span className="font-mono">{selected.pairing_code}</span>
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <p className="text-muted-foreground text-xs">Enviados 24 h</p>
+                    <p className="font-medium tabular-nums">{selected.sent_24h}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs">Enviados 7 d</p>
+                    <p className="font-medium tabular-nums">{selected.sent_7d}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs">Fallos 24 h</p>
+                    <p
+                      className={cn(
+                        "font-medium tabular-nums",
+                        selected.failed_24h > 0 && "text-destructive"
+                      )}
+                    >
+                      {selected.failed_24h}
+                    </p>
+                  </div>
+                </div>
+
+                {selected.business_id ? (
+                  <InstanceMessages
+                    key={`${selected.business_id}-${openFilter}`}
+                    businessId={selected.business_id}
+                    initialStatus={openFilter}
+                  />
+                ) : (
+                  <p className="text-muted-foreground text-sm">
+                    Esta instancia no está ligada a un negocio, así que no hay
+                    historial de mensajes en Reiz.
+                  </p>
+                )}
+
+                {selected.business_id ? (
+                  <Link
+                    href={`/dashboard/negocios/${selected.business_id}`}
+                    className="text-sm font-medium hover:underline"
+                  >
+                    Ver negocio
+                  </Link>
+                ) : null}
+              </div>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -543,6 +822,167 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="flex items-start justify-between gap-4 border-b border-foreground/5 py-1.5 last:border-0">
       <span className="text-muted-foreground">{label}</span>
       <span className="text-right font-medium">{value}</span>
+    </div>
+  );
+}
+
+function InstanceMessages({
+  businessId,
+  initialStatus,
+}: {
+  businessId: number;
+  initialStatus: MessageFilter;
+}) {
+  const [status, setStatus] = React.useState<MessageFilter>(initialStatus);
+  const [page, setPage] = React.useState(1);
+
+  React.useEffect(() => {
+    setPage(1);
+  }, [status]);
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["staff-evolution-messages", businessId, status, page],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        business_id: String(businessId),
+        page: String(page),
+        page_size: String(PAGE_SIZE),
+      });
+      if (status !== "all") params.set("status", status);
+      return apiJson<MessagesPayload>(
+        `/api/notifications/staff/evolution-ops/messages/?${params.toString()}`
+      );
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const counts = data?.counts ?? { all: 0, sent: 0, failed: 0, skipped: 0 };
+  const from = data && data.results.length ? (page - 1) * PAGE_SIZE + 1 : 0;
+  const to = data ? (page - 1) * PAGE_SIZE + data.results.length : 0;
+  const totalPages = data ? Math.max(1, Math.ceil(data.count / PAGE_SIZE)) : 1;
+  const filters: { id: MessageFilter; label: string; count: number }[] = [
+    { id: "all", label: "Todos", count: counts.all },
+    { id: "failed", label: "Fallidos", count: counts.failed },
+    { id: "sent", label: "Enviados", count: counts.sent },
+    { id: "skipped", label: "Omitidos", count: counts.skipped },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
+        Mensajes
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {filters.map((filter) => (
+          <Button
+            key={filter.id}
+            type="button"
+            size="xs"
+            variant={status === filter.id ? "default" : "outline"}
+            onClick={() => setStatus(filter.id)}
+          >
+            {filter.label}
+            <span className="tabular-nums opacity-80">{filter.count}</span>
+          </Button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 rounded-lg" />
+          ))}
+        </div>
+      ) : error || !data ? (
+        <p className="text-destructive text-sm">
+          {error instanceof Error
+            ? error.message
+            : "No se pudo cargar el historial."}
+        </p>
+      ) : data.results.length === 0 ? (
+        <p className="text-muted-foreground text-sm">
+          {status === "failed"
+            ? "No hay envíos fallidos."
+            : "Todavía no hay mensajes para este negocio."}
+        </p>
+      ) : (
+        <>
+          <ul className="space-y-2">
+            {data.results.map((row) => (
+              <li
+                key={row.id}
+                className={cn(
+                  "rounded-lg border px-3 py-3",
+                  row.status === "failed"
+                    ? "border-destructive/20 bg-destructive/5"
+                    : "border-foreground/10"
+                )}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="text-sm font-medium">{row.template_label}</p>
+                  <Badge
+                    variant={
+                      row.status === "failed"
+                        ? "destructive"
+                        : row.status === "sent"
+                          ? "default"
+                          : "secondary"
+                    }
+                  >
+                    {LOG_STATUS_LABEL[row.status]}
+                  </Badge>
+                </div>
+                <p className="text-muted-foreground mt-0.5 text-xs">
+                  {[row.recipient_name, row.recipient_phone]
+                    .filter(Boolean)
+                    .join(" · ") || "Sin destinatario"}
+                  {row.created_at ? ` · ${fmtWhen(row.created_at)}` : ""}
+                </p>
+                {row.status === "failed" && row.error_message ? (
+                  <p className="text-destructive mt-2 text-sm leading-snug">
+                    {row.error_message}
+                  </p>
+                ) : null}
+                {row.body_preview ? (
+                  <p className="text-muted-foreground mt-2 line-clamp-3 text-xs">
+                    {row.body_preview}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <p className="text-muted-foreground text-xs tabular-nums">
+              {from}–{to} de {data.count}
+            </p>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="size-3.5" />
+                Anterior
+              </Button>
+              <span className="text-muted-foreground px-1 text-xs tabular-nums">
+                {page}/{totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                disabled={!data.next}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Siguiente
+                <ChevronRight className="size-3.5" />
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
