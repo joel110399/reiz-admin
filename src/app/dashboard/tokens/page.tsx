@@ -1,6 +1,7 @@
 "use client";
 
 import { PaginatedTable } from "@/components/paginated-table";
+import { ActiveBadge } from "@/components/status-badge";
 
 export default function TokensPage() {
   return (
@@ -20,7 +21,7 @@ export default function TokensPage() {
         {
           key: "active",
           header: "Activo",
-          render: (r) => (r.is_active ? "Sí" : "No"),
+          render: (r) => <ActiveBadge active={!!r.is_active} />,
         },
         {
           key: "token",

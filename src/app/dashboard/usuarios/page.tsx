@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Eye } from "lucide-react";
 
 import { PaginatedTable } from "@/components/paginated-table";
+import { ActiveBadge, RoleBadge } from "@/components/status-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -12,8 +13,9 @@ export default function UsuariosPage() {
     <PaginatedTable
       queryKey="staff-users"
       initialPath="/api/auth/staff/users/"
-      title="Usuarios (cuentas)"
-      description="Usuarios del sistema — endpoint interno staff."
+      title="Usuarios"
+      description="Cuentas del sistema. Pulsa una fila para ver dueños y acceso."
+      rowHref={(r) => `/dashboard/usuarios/${r.id}`}
       columns={[
         { key: "id", header: "ID", render: (r) => String(r.id) },
         { key: "email", header: "Email", render: (r) => String(r.email ?? "") },
@@ -22,16 +24,22 @@ export default function UsuariosPage() {
           header: "Usuario",
           render: (r) => String(r.username ?? ""),
         },
-        { key: "role", header: "Rol", render: (r) => String(r.role ?? "") },
+        { key: "role", header: "Rol", render: (r) => <RoleBadge role={String(r.role ?? "")} /> },
         {
           key: "staff",
           header: "Staff",
-          render: (r) => (r.is_staff ? "Sí" : "No"),
+          render: (r) => (
+            <ActiveBadge
+              active={!!r.is_staff}
+              trueLabel="Staff"
+              falseLabel="No"
+            />
+          ),
         },
         {
           key: "active",
           header: "Activo",
-          render: (r) => (r.is_active ? "Sí" : "No"),
+          render: (r) => <ActiveBadge active={!!r.is_active} />,
         },
         {
           key: "joined",

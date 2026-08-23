@@ -22,7 +22,10 @@ import {
 } from "lucide-react";
 
 import { KpiStatCard } from "@/components/dashboard/kpi-stat-card";
+import { BookingStatusBadge } from "@/components/status-badge";
 import { apiJson } from "@/lib/api-client";
+import { timeShort } from "@/lib/labels";
+import type { Paginated } from "@/types/drf";
 import {
   Card,
   CardContent,
@@ -67,6 +70,15 @@ const STATUS_LABEL: Record<string, string> = {
   confirmed: "Confirmada",
   completed: "Completada",
   cancelled: "Cancelada",
+};
+
+type QueueBooking = {
+  id: number;
+  date: string;
+  start_time: string;
+  status: string;
+  business?: number | { id: number; name?: string };
+  client?: number | { id: number; name?: string } | null;
 };
 
 const CHART_COLORS = [
@@ -116,6 +128,14 @@ export default function DashboardPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["staff-summary"],
     queryFn: () => apiJson<Summary>("/api/auth/staff/summary/"),
+  });
+
+  const { data: queue } = useQuery({
+    queryKey: ["bookings-queue-pending"],
+    queryFn: () =>
+      apiJson<Paginated<QueueBooking>>(
+        "/api/bookings/?status=pending&page_size=6"
+      ),
   });
 
   const chartData = React.useMemo(() => {
@@ -393,38 +413,101 @@ export default function DashboardPage() {
         </Card>
       </section>
 
-      <Card className="ring-1 ring-foreground/10 shadow-none">
-        <CardHeader className="pb-3">
-          <CardTitle className="font-heading text-base">
-            Accesos rápidos
-          </CardTitle>
-          <CardDescription>
-            Ir a las secciones más usadas del panel interno
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2 pt-0">
-          {[
-            { href: "/dashboard/negocios", label: "Negocios" },
-            { href: "/dashboard/reservas", label: "Reservas" },
-            { href: "/dashboard/clientes", label: "Clientes" },
-            { href: "/dashboard/resenas", label: "Reseñas" },
-            { href: "/dashboard/usuarios", label: "Usuarios" },
-            { href: "/dashboard/buscar", label: "Búsqueda" },
-          ].map((l) => (
+      <section className="grid gap-4 lg:grid-cols-3">
+        <Card className="shadow-none ring-1 ring-foreground/10 lg:col-span-2">
+          <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0">
+            <div>
+              <CardTitle className="font-heading text-lg">
+                Cola de pendientes
+              </CardTitle>
+              <CardDescription>
+                Casos que suelen requerir confirmación o reprogramación
+              </CardDescription>
+            </div>
             <Link
-              key={l.href}
-              href={l.href}
+              href="/dashboard/reservas?status=pending"
               className={cn(
-                buttonVariants({ variant: "secondary", size: "sm" }),
-                "inline-flex gap-1.5 rounded-full no-underline"
+                buttonVariants({ variant: "ghost", size: "sm" }),
+                "no-underline"
               )}
             >
-              {l.label}
-              <ArrowRight className="size-3.5 opacity-70" />
+              Ver todas
+              <ArrowRight className="ml-1 size-3.5" />
             </Link>
-          ))}
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {!queue?.results.length ? (
+              <p className="text-muted-foreground py-8 text-sm">
+                No hay reservas pendientes ahora mismo.
+              </p>
+            ) : (
+              <ul className="divide-border divide-y">
+                {queue.results.map((row) => {
+                  const biz =
+                    typeof row.business === "object" && row.business
+                      ? row.business.name ?? `#${row.business.id}`
+                      : String(row.business ?? "—");
+                  const client =
+                    row.client &&
+                    typeof row.client === "object" &&
+                    "name" in row.client
+                      ? String(row.client.name)
+                      : "Sin cliente";
+                  return (
+                    <li key={row.id}>
+                      <Link
+                        href={`/dashboard/reservas/${row.id}`}
+                        className="hover:bg-muted/40 -mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-3 no-underline"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium">
+                            {client}
+                          </span>
+                          <span className="text-muted-foreground block truncate text-xs">
+                            {biz} · {row.date} {timeShort(row.start_time)}
+                          </span>
+                        </span>
+                        <BookingStatusBadge status={row.status} />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-none ring-1 ring-foreground/10">
+          <CardHeader className="pb-3">
+            <CardTitle className="font-heading text-base">
+              Atajos de soporte
+            </CardTitle>
+            <CardDescription>Los flujos que más se usan al día</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 pt-0">
+            {[
+              { href: "/dashboard/buscar", label: "Resolver un caso" },
+              { href: "/dashboard/reservas", label: "Reservas" },
+              { href: "/dashboard/clientes", label: "Clientes / fusionar" },
+              { href: "/dashboard/negocios", label: "Negocios" },
+              { href: "/dashboard/usuarios", label: "Usuarios" },
+              { href: "/dashboard/evolution", label: "WhatsApp" },
+            ].map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                className={cn(
+                  buttonVariants({ variant: "secondary", size: "sm" }),
+                  "justify-between no-underline"
+                )}
+              >
+                {l.label}
+                <ArrowRight className="size-3.5 opacity-70" />
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      </section>
     </div>
   );
 }

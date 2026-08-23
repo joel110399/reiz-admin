@@ -1,6 +1,7 @@
 "use client";
 
 import { PaginatedTable } from "@/components/paginated-table";
+import { ActiveBadge } from "@/components/status-badge";
 
 export default function EquipoPage() {
   return (
@@ -23,12 +24,18 @@ export default function EquipoPage() {
         {
           key: "owner",
           header: "Dueño",
-          render: (r) => (r.is_owner ? "Sí" : "No"),
+          render: (r) => (
+            <ActiveBadge
+              active={!!r.is_owner}
+              trueLabel="Dueño"
+              falseLabel="Miembro"
+            />
+          ),
         },
         {
           key: "active",
           header: "Activo",
-          render: (r) => (r.is_active ? "Sí" : "No"),
+          render: (r) => <ActiveBadge active={!!r.is_active} />,
         },
       ]}
     />

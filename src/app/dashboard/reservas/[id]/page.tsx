@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
+import { BookingEditForm } from "@/components/booking-edit-form";
 import { DetailPageHeader } from "@/components/detail-page-header";
+import { BookingStatusBadge } from "@/components/status-badge";
 import {
   Card,
   CardContent,
@@ -12,7 +14,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { apiJson } from "@/lib/api-client";
+import { timeShort } from "@/lib/labels";
+import { pushRecentCase } from "@/lib/recent-cases";
+import * as React from "react";
 
 type BookingDetail = {
   id: number;
@@ -46,11 +52,6 @@ type BookingDetail = {
   updated_at?: string;
 };
 
-function timeShort(t: string | undefined) {
-  if (!t) return "—";
-  return t.length >= 8 ? t.slice(0, 5) : t;
-}
-
 export default function ReservaDetailPage() {
   const params = useParams();
   const id = String(params.id ?? "");
@@ -61,6 +62,16 @@ export default function ReservaDetailPage() {
     enabled: !!id,
   });
 
+  React.useEffect(() => {
+    if (!b) return;
+    pushRecentCase({
+      kind: "booking",
+      id: b.id,
+      label: `Reserva #${b.id}`,
+      href: `/dashboard/reservas/${b.id}`,
+    });
+  }, [b]);
+
   if (!id) {
     return (
       <p className="text-muted-foreground text-sm">ID de reserva no válido.</p>
@@ -69,7 +80,13 @@ export default function ReservaDetailPage() {
 
   if (isLoading) {
     return (
-      <p className="text-muted-foreground text-sm">Cargando reserva…</p>
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <div className="grid gap-4 md:grid-cols-2">
+          <Skeleton className="h-72 rounded-xl" />
+          <Skeleton className="h-72 rounded-xl" />
+        </div>
+      </div>
     );
   }
 
@@ -92,7 +109,8 @@ export default function ReservaDetailPage() {
     typeof b.business === "object" && b.business
       ? b.business.id
       : Number(b.business);
-  const clientId = b.client_detail?.id ?? (typeof b.client === "number" ? b.client : null);
+  const clientId =
+    b.client_detail?.id ?? (typeof b.client === "number" ? b.client : null);
 
   const bizName =
     b.business_detail?.name ??
@@ -105,48 +123,29 @@ export default function ReservaDetailPage() {
       <DetailPageHeader
         backHref="/dashboard/reservas"
         title={`Reserva #${b.id}`}
-        description={`${b.date} · ${timeShort(b.start_time)}–${timeShort(b.end_time)} · ${b.status}`}
+        description={`${b.date} · ${timeShort(b.start_time)}–${timeShort(b.end_time)}`}
+        actions={<BookingStatusBadge status={b.status} className="h-6 px-2.5" />}
       />
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="shadow-none">
           <CardHeader>
-            <CardTitle>Estado y horario</CardTitle>
-            <CardDescription>Campos editables desde el listado</CardDescription>
+            <CardTitle>Resolver caso</CardTitle>
+            <CardDescription>
+              Confirma, reprograma o cancela sin volver al listado
+            </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-2 text-sm">
-            <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Estado</span>
-              <span>{b.status}</span>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Fecha</span>
-              <span>{b.date}</span>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Inicio / fin</span>
-              <span className="font-mono">
-                {timeShort(b.start_time)} – {timeShort(b.end_time)}
-              </span>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Sin cita</span>
-              <span>{b.is_walk_in ? "Sí" : "No"}</span>
-            </div>
-            {b.notes ? (
-              <div className="border-border mt-2 border-t pt-2">
-                <span className="text-muted-foreground text-xs">Notas</span>
-                <p className="mt-1 whitespace-pre-wrap">{b.notes}</p>
-              </div>
-            ) : null}
+          <CardContent>
+            <BookingEditForm booking={b} />
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-none">
           <CardHeader>
-            <CardTitle>Relaciones</CardTitle>
+            <CardTitle>Contexto</CardTitle>
+            <CardDescription>Personas y servicio de esta cita</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3 text-sm">
+          <CardContent className="grid gap-4 text-sm">
             <div>
               <span className="text-muted-foreground text-xs">Negocio</span>
               <p className="mt-0.5">
@@ -192,20 +191,25 @@ export default function ReservaDetailPage() {
             </div>
             {b.team_member_detail || b.team_member ? (
               <div>
-                <span className="text-muted-foreground text-xs">Profesional</span>
+                <span className="text-muted-foreground text-xs">
+                  Profesional
+                </span>
                 <p className="mt-0.5">
                   {b.team_member_detail?.name ?? `#${b.team_member}`}
                 </p>
               </div>
             ) : null}
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Sin cita previa</span>
+              <span>{b.is_walk_in ? "Sí" : "No"}</span>
+            </div>
+            <p className="text-muted-foreground text-xs">
+              Creado: {b.created_at?.slice(0, 19) ?? "—"} · Actualizado:{" "}
+              {b.updated_at?.slice(0, 19) ?? "—"}
+            </p>
           </CardContent>
         </Card>
       </div>
-
-      <p className="text-muted-foreground mt-6 text-xs">
-        Creado: {b.created_at?.slice(0, 19) ?? "—"} · Actualizado:{" "}
-        {b.updated_at?.slice(0, 19) ?? "—"}
-      </p>
     </>
   );
 }

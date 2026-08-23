@@ -7,8 +7,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { DetailPageHeader } from "@/components/detail-page-header";
+import { ActiveBadge } from "@/components/status-badge";
 import { GoldieImportPanel } from "@/components/goldie-import-panel";
 import { ServiceCategoryManager } from "@/components/service-category-manager";
+import { AdvancePaymentCard } from "@/components/advance-payment-card";
 import {
   Card,
   CardContent,
@@ -28,6 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { apiJson, apiFetch, formatApiErrorBody } from "@/lib/api-client";
 import { fetchAllPages } from "@/lib/drf-helpers";
+import { pushRecentCase } from "@/lib/recent-cases";
 
 type OwnerDetail = {
   id: number;
@@ -123,6 +126,21 @@ type BusinessDetail = {
   onboarding_completed?: boolean;
   pos_enabled?: boolean;
   whatsapp_messaging_enabled?: boolean;
+  requires_advance_payment?: boolean;
+  advance_payment_amount?: string | number | null;
+  advance_payment_notify_phone?: string | null;
+  bank_accounts?: {
+    id: number;
+    bank_name: string;
+    account_type: string;
+    account_type_display?: string;
+    account_number: string;
+    account_holder: string;
+    document_id?: string;
+    notes?: string;
+    is_active?: boolean;
+    sort_order?: number;
+  }[];
   business_hours?: BusinessHour[];
   services?: ServiceItem[];
   team_members?: TeamMember[];
@@ -252,14 +270,22 @@ export default function NegocioDetailPage() {
   const stats = biz.reviews_stats;
   const owner = biz.owner_detail;
 
+  React.useEffect(() => {
+    pushRecentCase({
+      kind: "business",
+      id: biz.id,
+      label: biz.name,
+      href: `/dashboard/negocios/${biz.id}`,
+    });
+  }, [biz]);
+
   return (
     <>
       <DetailPageHeader
         backHref="/dashboard/negocios"
         title={biz.name}
-        description={`#${biz.id}${biz.slug ? ` · ${biz.slug}` : ""} · ${
-          biz.is_active ? "Activo" : "Inactivo"
-        }${typeof biz.is_open_now === "boolean" ? ` · ${biz.is_open_now ? "Abierto ahora" : "Cerrado ahora"}` : ""}`}
+        description={`#${biz.id}${biz.slug ? ` · ${biz.slug}` : ""}${typeof biz.is_open_now === "boolean" ? ` · ${biz.is_open_now ? "Abierto ahora" : "Cerrado ahora"}` : ""}`}
+        actions={<ActiveBadge active={!!biz.is_active} />}
       />
 
       <Tabs defaultValue="resumen" className="w-full">
@@ -364,6 +390,14 @@ export default function NegocioDetailPage() {
           </div>
 
           <PosEnabledCard id={biz.id} posEnabled={!!biz.pos_enabled} />
+
+          <AdvancePaymentCard
+            id={biz.id}
+            requiresAdvancePayment={!!biz.requires_advance_payment}
+            amount={biz.advance_payment_amount}
+            notifyPhone={biz.advance_payment_notify_phone}
+            accounts={biz.bank_accounts ?? []}
+          />
 
           <Card>
             <CardHeader>

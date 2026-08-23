@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Download, Search } from "lucide-react";
 
@@ -134,20 +135,24 @@ function buildPageLink(
   initialPath: string,
   page: number,
   pageSize: number,
-  search: string | undefined
+  search: string | undefined,
+  extraQuery?: Record<string, string | null | undefined>
 ): string {
+  const extra = extraQuery ?? {};
   if (paginationStyle === "limit") {
     const offset = (page - 1) * pageSize;
     return mergeQuery(initialPath, {
       limit: String(pageSize),
       offset: offset > 0 ? String(offset) : null,
       search: search?.trim() || null,
+      ...extra,
     });
   }
   return mergeQuery(initialPath, {
     page: page > 1 ? String(page) : null,
     page_size: String(pageSize),
     search: search?.trim() || null,
+    ...extra,
   });
 }
 
@@ -186,6 +191,8 @@ export function PaginatedTable<T extends Record<string, unknown>>({
   columns,
   toolbar,
   renderRowActions,
+  rowHref,
+  extraQuery,
   filters,
   showSearch = true,
   searchPlaceholder = "Buscar…",
@@ -202,6 +209,8 @@ export function PaginatedTable<T extends Record<string, unknown>>({
   columns: PaginatedColumn<T>[];
   toolbar?: React.ReactNode;
   renderRowActions?: (row: T) => React.ReactNode;
+  rowHref?: (row: T) => string | undefined;
+  extraQuery?: Record<string, string | null | undefined>;
   /** Bloque opcional bajo el título «Filtros» (selects, etc.). */
   filters?: React.ReactNode;
   showSearch?: boolean;
@@ -213,25 +222,32 @@ export function PaginatedTable<T extends Record<string, unknown>>({
   exportFileName?: string;
   enableExport?: boolean;
 }) {
+  const router = useRouter();
   const [pageSize, setPageSize] = React.useState(defaultPageSize);
   const [searchInput, setSearchInput] = React.useState("");
   const debouncedSearch = useDebouncedValue(searchInput, 350);
+  const extraKey = JSON.stringify(extraQuery ?? {});
 
   const baseParams = React.useMemo(() => {
     const s = debouncedSearch.trim();
+    const extra = extraQuery ?? {};
     if (paginationStyle === "limit") {
       return {
         limit: String(pageSize),
         offset: null as string | null,
         search: s || null,
+        ...extra,
       };
     }
     return {
       page_size: String(pageSize),
       page: null as string | null,
       search: s || null,
+      ...extra,
     };
-  }, [debouncedSearch, pageSize, paginationStyle]);
+    // extraKey keeps the object identity stable for parents that inline extras.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, extraKey, pageSize, paginationStyle]);
 
   const [pageUrl, setPageUrl] = React.useState(() =>
     mergeQuery(initialPath, baseParams)
@@ -292,11 +308,12 @@ export function PaginatedTable<T extends Record<string, unknown>>({
           initialPath,
           p,
           pageSize,
-          debouncedSearch.trim() || undefined
+          debouncedSearch.trim() || undefined,
+          extraQuery
         )
       );
     },
-    [data, debouncedSearch, initialPath, pageSize, paginationStyle]
+    [data, debouncedSearch, extraQuery, initialPath, pageSize, paginationStyle]
   );
 
   if (isLoading && !data) {
@@ -440,10 +457,20 @@ export function PaginatedTable<T extends Record<string, unknown>>({
                   </TableCell>
                 </TableRow>
               )}
-              {data.results.map((row, i) => (
+              {data.results.map((row, i) => {
+                const href = rowHref?.(row);
+                return (
                 <TableRow
                   key={i}
-                  className="border-border/80 hover:bg-muted/30"
+                  className={cn(
+                    "border-border/80 hover:bg-muted/30",
+                    href && "cursor-pointer"
+                  )}
+                  onClick={
+                    href
+                      ? () => router.push(href)
+                      : undefined
+                  }
                 >
                   {columns.map((c) => (
                     <TableCell
@@ -454,12 +481,16 @@ export function PaginatedTable<T extends Record<string, unknown>>({
                     </TableCell>
                   ))}
                   {actionCol ? (
-                    <TableCell className="px-4 py-3 text-right">
+                    <TableCell
+                      className="px-4 py-3 text-right"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       {renderRowActions!(row)}
                     </TableCell>
                   ) : null}
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>

@@ -1,12 +1,15 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eye, Pencil, Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 
+import { BookingEditForm } from "@/components/booking-edit-form";
 import { PaginatedTable } from "@/components/paginated-table";
+import { BookingStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -18,7 +21,6 @@ import {
 } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -26,10 +28,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiFetch, formatApiErrorBody } from "@/lib/api-client";
+import { apiFetch, apiJson, formatApiErrorBody } from "@/lib/api-client";
 import { fetchAllPages } from "@/lib/drf-helpers";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { BOOKING_STATUSES, bookingStatusLabel, timeShort } from "@/lib/labels";
+import type { Paginated } from "@/types/drf";
 
 type BookingRow = {
   id: number;
@@ -43,37 +45,51 @@ type BookingRow = {
   service?: number | null;
 };
 
-type Opt = { id: number; name: string };
+type Opt = { id: number; name: string; email?: string | null; phone?: string | null };
 
-function idOf(
-  v: number | { id: number } | null | undefined
-): number | undefined {
-  if (v == null) return undefined;
-  return typeof v === "object" ? v.id : v;
+function useDebounced<T>(value: T, delay: number) {
+  const [debounced, setDebounced] = React.useState(value);
+  React.useEffect(() => {
+    const t = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
 }
 
 export default function ReservasPage() {
+  return (
+    <Suspense>
+      <ReservasPageInner />
+    </Suspense>
+  );
+}
+
+function ReservasPageInner() {
   const qc = useQueryClient();
+  const searchParams = useSearchParams();
+  const urlStatus = searchParams.get("status") ?? "all";
+  const [statusFilter, setStatusFilter] = React.useState(
+    BOOKING_STATUSES.includes(urlStatus as (typeof BOOKING_STATUSES)[number])
+      ? urlStatus
+      : "all"
+  );
   const [open, setOpen] = React.useState(false);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<BookingRow | null>(null);
 
-  const [status, setStatus] = React.useState("pending");
-  const [date, setDate] = React.useState("");
-  const [startTime, setStartTime] = React.useState("");
-  const [endTime, setEndTime] = React.useState("");
-  const [notes, setNotes] = React.useState("");
-
   const [cBusiness, setCBusiness] = React.useState("");
   const [cClient, setCClient] = React.useState("");
+  const [cClientLabel, setCClientLabel] = React.useState("");
+  const [cClientQuery, setCClientQuery] = React.useState("");
   const [cService, setCService] = React.useState("");
   const [cDate, setCDate] = React.useState("");
   const [cStart, setCStart] = React.useState("09:00");
+  const clientSearch = useDebounced(cClientQuery, 280);
 
   const { data: businesses = [] } = useQuery({
     queryKey: ["businesses-all"],
     queryFn: () => fetchAllPages<Opt>("/api/businesses/"),
-    enabled: open || createOpen,
+    enabled: createOpen,
   });
 
   const { data: services = [] } = useQuery({
@@ -85,43 +101,16 @@ export default function ReservasPage() {
     enabled: createOpen && !!cBusiness,
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["bookings"] });
-
-  React.useEffect(() => {
-    if (open && editing) {
-      setStatus(editing.status);
-      setDate(String(editing.date ?? ""));
-      setStartTime(String(editing.start_time ?? "").slice(0, 8));
-      setEndTime(String(editing.end_time ?? "").slice(0, 8));
-      setNotes(editing.notes ?? "");
-    }
-  }, [open, editing]);
-
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      if (!editing) return;
-      const body: Record<string, unknown> = {
-        status,
-        notes: notes.trim() || null,
-        date,
-        start_time: startTime.length === 5 ? `${startTime}:00` : startTime,
-        end_time: endTime.length === 5 ? `${endTime}:00` : endTime,
-      };
-      const res = await apiFetch(`/api/bookings/${editing.id}/`, {
-        method: "PATCH",
-        body: JSON.stringify(body),
-      });
-      const t = await res.text();
-      if (!res.ok) throw new Error(formatApiErrorBody(t, res.statusText));
-    },
-    onSuccess: () => {
-      toast.success("Reserva actualizada");
-      setOpen(false);
-      setEditing(null);
-      invalidate();
-    },
-    onError: (e: Error) => toast.error(e.message),
+  const { data: clientHits } = useQuery({
+    queryKey: ["client-picker", cBusiness, clientSearch],
+    queryFn: () =>
+      apiJson<Paginated<Opt>>(
+        `/api/bookings/clients/?business=${encodeURIComponent(cBusiness)}&search=${encodeURIComponent(clientSearch)}&page_size=12`
+      ),
+    enabled: createOpen && !!cBusiness && clientSearch.trim().length >= 1,
   });
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["bookings"] });
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -151,6 +140,8 @@ export default function ReservasPage() {
       setCreateOpen(false);
       setCBusiness("");
       setCClient("");
+      setCClientLabel("");
+      setCClientQuery("");
       setCService("");
       setCDate("");
       setCStart("09:00");
@@ -165,16 +156,37 @@ export default function ReservasPage() {
         queryKey="bookings"
         initialPath="/api/bookings/"
         title="Reservas"
-        description="Editar estado y horario; crear reserva ligando cliente existente (staff)."
+        description="Confirma, reprograma o cancela citas. Pulsa una fila para abrir el caso."
+        extraQuery={{
+          status: statusFilter === "all" ? null : statusFilter,
+        }}
+        rowHref={(r) => `/dashboard/reservas/${r.id}`}
         toolbar={
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => setCreateOpen(true)}
-          >
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
             <Plus className="mr-1 size-4" />
             Nueva reserva
           </Button>
+        }
+        filters={
+          <div className="space-y-2">
+            <Label>Estado</Label>
+            <Select
+              value={statusFilter}
+              onValueChange={(v) => setStatusFilter(v ?? "all")}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {BOOKING_STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {bookingStatusLabel(s)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         }
         columns={[
           { key: "id", header: "ID", render: (r) => String(r.id) },
@@ -183,12 +195,12 @@ export default function ReservasPage() {
             key: "time",
             header: "Horario",
             render: (r) =>
-              `${String(r.start_time ?? "").slice(0, 5)}–${String(r.end_time ?? "").slice(0, 5)}`,
+              `${timeShort(r.start_time)}–${timeShort(r.end_time)}`,
           },
           {
             key: "status",
             header: "Estado",
-            render: (r) => String(r.status ?? ""),
+            render: (r) => <BookingStatusBadge status={r.status} />,
           },
           {
             key: "business",
@@ -208,118 +220,51 @@ export default function ReservasPage() {
           },
         ]}
         renderRowActions={(row) => (
-          <div className="flex justify-end gap-1">
-            <Link
-              href={`/dashboard/reservas/${row.id}`}
-              className={cn(
-                buttonVariants({ variant: "ghost", size: "icon" }),
-                "size-8"
-              )}
-              aria-label="Ver detalle"
-            >
-              <Eye className="size-4" />
-            </Link>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              aria-label="Editar"
-              onClick={() => {
-                setEditing(row);
-                setOpen(true);
-              }}
-            >
-              <Pencil className="size-4" />
-            </Button>
-          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            aria-label="Editar"
+            onClick={() => {
+              setEditing(row);
+              setOpen(true);
+            }}
+          >
+            <Pencil className="size-4" />
+          </Button>
         )}
       />
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-md">
           <SheetHeader>
-            <SheetTitle>Editar reserva #{editing?.id}</SheetTitle>
+            <SheetTitle>Resolver reserva #{editing?.id}</SheetTitle>
             <SheetDescription>
-              Ajusta estado, fecha u horas; respeta solapes del negocio.
+              Cambia estado, fecha u horas. El backend valida solapes.
             </SheetDescription>
           </SheetHeader>
-          <div className="grid gap-3 px-4 py-2">
-            <div className="space-y-2">
-              <Label>Estado</Label>
-              <Select
-                value={status}
-                onValueChange={(v) => setStatus(v ?? "pending")}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {["pending", "confirmed", "completed", "cancelled"].map(
-                    (s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
-                    )
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Fecha</Label>
-              <Input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
+          <div className="px-4 py-2">
+            {editing ? (
+              <BookingEditForm
+                booking={editing}
+                onSaved={() => {
+                  setOpen(false);
+                  setEditing(null);
+                }}
+                onCancel={() => setOpen(false)}
               />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-2">
-                <Label>Inicio</Label>
-                <Input
-                  type="time"
-                  value={startTime.length > 5 ? startTime.slice(0, 5) : startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Fin</Label>
-                <Input
-                  type="time"
-                  value={endTime.length > 5 ? endTime.slice(0, 5) : endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Notas</Label>
-              <Textarea
-                rows={3}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-            </div>
+            ) : null}
           </div>
-          <SheetFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Cerrar
-            </Button>
-            <Button
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
-            >
-              {saveMutation.isPending ? "Guardando…" : "Guardar"}
-            </Button>
-          </SheetFooter>
         </SheetContent>
       </Sheet>
 
       <Sheet open={createOpen} onOpenChange={setCreateOpen}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-md">
           <SheetHeader>
-            <SheetTitle>Nueva reserva (staff)</SheetTitle>
+            <SheetTitle>Nueva reserva</SheetTitle>
             <SheetDescription>
-              Usa IDs de cliente y servicio del mismo negocio. El fin se calcula
-              con la duración del servicio.
+              Busca el cliente del negocio. El fin se calcula con la duración
+              del servicio.
             </SheetDescription>
           </SheetHeader>
           <div className="grid gap-3 px-4 py-2">
@@ -327,7 +272,12 @@ export default function ReservasPage() {
               <Label>Negocio</Label>
               <Select
                 value={cBusiness}
-                onValueChange={(v) => setCBusiness(v ?? "")}
+                onValueChange={(v) => {
+                  setCBusiness(v ?? "");
+                  setCClient("");
+                  setCClientLabel("");
+                  setCService("");
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Negocio" />
@@ -342,13 +292,63 @@ export default function ReservasPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>ID cliente</Label>
-              <Input
-                inputMode="numeric"
-                value={cClient}
-                onChange={(e) => setCClient(e.target.value)}
-                placeholder="pk del cliente"
-              />
+              <Label>Cliente</Label>
+              {cClient ? (
+                <div className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
+                  <span className="truncate">{cClientLabel || `#${cClient}`}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setCClient("");
+                      setCClientLabel("");
+                    }}
+                  >
+                    Cambiar
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Input
+                    value={cClientQuery}
+                    onChange={(e) => setCClientQuery(e.target.value)}
+                    placeholder={
+                      cBusiness
+                        ? "Nombre, email o teléfono"
+                        : "Elige un negocio primero"
+                    }
+                    disabled={!cBusiness}
+                  />
+                  {clientHits?.results?.length ? (
+                    <ul className="max-h-40 overflow-y-auto rounded-lg border">
+                      {clientHits.results.map((c) => (
+                        <li key={c.id}>
+                          <button
+                            type="button"
+                            className="hover:bg-muted w-full px-3 py-2 text-left text-sm"
+                            onClick={() => {
+                              setCClient(String(c.id));
+                              setCClientLabel(
+                                [c.name, c.phone || c.email]
+                                  .filter(Boolean)
+                                  .join(" · ")
+                              );
+                              setCClientQuery("");
+                            }}
+                          >
+                            <span className="block font-medium">{c.name}</span>
+                            <span className="text-muted-foreground text-xs">
+                              {[c.phone, c.email].filter(Boolean).join(" · ") ||
+                                `#${c.id}`}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Servicio</Label>

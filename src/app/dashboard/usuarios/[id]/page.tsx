@@ -1,10 +1,12 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import { DetailPageHeader } from "@/components/detail-page-header";
+import { ActiveBadge, RoleBadge } from "@/components/status-badge";
 import {
   Card,
   CardContent,
@@ -14,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import { apiJson } from "@/lib/api-client";
 import { fetchAllPages } from "@/lib/drf-helpers";
+import { pushRecentCase } from "@/lib/recent-cases";
 
 type UserDetail = {
   id: number;
@@ -79,13 +82,22 @@ export default function UsuarioDetailPage() {
 
   const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ");
 
+  React.useEffect(() => {
+    pushRecentCase({
+      kind: "user",
+      id: user.id,
+      label: fullName || user.email || user.username,
+      href: `/dashboard/usuarios/${user.id}`,
+    });
+  }, [fullName, user]);
+
   return (
     <>
-      <DetailPageHeader
-        backHref="/dashboard/usuarios"
-        title={fullName || user.username || user.email}
-        description={`#${user.id} · ${user.email}`}
-      />
+        <DetailPageHeader
+          backHref="/dashboard/usuarios"
+          title={fullName || user.username || user.email}
+          description={`#${user.id} · ${user.email}`}
+        />
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
@@ -104,15 +116,19 @@ export default function UsuarioDetailPage() {
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">Rol</span>
-              <span>{user.role}</span>
+              <RoleBadge role={user.role} />
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">Staff</span>
-              <span>{user.is_staff ? "Sí" : "No"}</span>
+              <ActiveBadge
+                active={user.is_staff}
+                trueLabel="Staff"
+                falseLabel="No"
+              />
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">Activo</span>
-              <span>{user.is_active ? "Sí" : "No"}</span>
+              <ActiveBadge active={user.is_active} />
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">Alta</span>

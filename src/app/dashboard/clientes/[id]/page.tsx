@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ClientMergeButton } from "@/components/client-merge-dialog";
 import { DetailPageHeader } from "@/components/detail-page-header";
+import { BookingStatusBadge } from "@/components/status-badge";
 import {
   Card,
   CardContent,
@@ -23,6 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { apiJson } from "@/lib/api-client";
+import { pushRecentCase } from "@/lib/recent-cases";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -119,6 +121,15 @@ export default function ClienteDetailPage() {
 
   const bid = client.business;
 
+  React.useEffect(() => {
+    pushRecentCase({
+      kind: "client",
+      id: client.id,
+      label: client.name,
+      href: `/dashboard/clientes/${client.id}`,
+    });
+  }, [client]);
+
   return (
     <>
       <DetailPageHeader
@@ -201,8 +212,8 @@ export default function ClienteDetailPage() {
                       .length;
                     if (!n) return null;
                     return (
-                      <li key={st} className="flex justify-between">
-                        <span>{st}</span>
+                      <li key={st} className="flex items-center justify-between">
+                        <BookingStatusBadge status={st} />
                         <span className="text-muted-foreground">{n}</span>
                       </li>
                     );
@@ -251,7 +262,9 @@ export default function ClienteDetailPage() {
                     <TableCell>
                       {timeShort(b.start_time)}–{timeShort(b.end_time)}
                     </TableCell>
-                    <TableCell>{b.status}</TableCell>
+                    <TableCell>
+                      <BookingStatusBadge status={b.status} />
+                    </TableCell>
                     <TableCell>
                       {b.service_detail?.name ?? "—"}
                     </TableCell>

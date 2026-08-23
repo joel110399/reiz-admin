@@ -6,6 +6,7 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { PaginatedTable } from "@/components/paginated-table";
+import { ActiveBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -180,7 +181,7 @@ export default function ServiciosPage() {
         queryKey="services"
         initialPath="/api/services/"
         title="Servicios"
-        description="CRUD sobre servicios de cualquier negocio."
+        description="Catálogo de cualquier negocio: precio, duración y categoría."
         toolbar={
           <Button
             size="sm"
@@ -221,7 +222,7 @@ export default function ServiciosPage() {
           {
             key: "active",
             header: "Activo",
-            render: (r) => (r.is_active ? "Sí" : "No"),
+            render: (r) => <ActiveBadge active={r.is_active} />,
           },
         ]}
         renderRowActions={(row) => (

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { CreateBusinessWizard } from "@/components/create-business-wizard";
 import { PaginatedTable } from "@/components/paginated-table";
+import { ActiveBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -100,7 +101,8 @@ export default function NegociosPage() {
         paginationStyle="limit"
         defaultPageSize={10}
         title="Negocios"
-        description="Editar datos básicos o crear negocio asignando un usuario con rol negocio."
+        description="Ficha, POS, adelantos e importación. Pulsa una fila para abrir el caso."
+        rowHref={(r) => `/dashboard/negocios/${r.id}`}
         toolbar={
           <Button size="sm" onClick={() => setCreateOpen(true)}>
             <Plus className="mr-1 size-4" />
@@ -119,7 +121,7 @@ export default function NegociosPage() {
           {
             key: "is_active",
             header: "Activo",
-            render: (r) => (r.is_active ? "Sí" : "No"),
+            render: (r) => <ActiveBadge active={r.is_active} />,
           },
         ]}
         renderRowActions={(row) => (

@@ -1,6 +1,7 @@
 "use client";
 
 import { PaginatedTable } from "@/components/paginated-table";
+import { ActiveBadge } from "@/components/status-badge";
 
 export default function NotificacionesPage() {
   return (
@@ -23,7 +24,13 @@ export default function NotificacionesPage() {
         {
           key: "read",
           header: "Leída",
-          render: (r) => (r.read ? "Sí" : "No"),
+          render: (r) => (
+            <ActiveBadge
+              active={!!r.read}
+              trueLabel="Leída"
+              falseLabel="Pendiente"
+            />
+          ),
         },
         {
           key: "created",

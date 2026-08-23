@@ -137,7 +137,8 @@ export default function ClientesPage() {
         queryKey="clients"
         initialPath="/api/bookings/clients/"
         title="Clientes"
-        description="Crear, editar o eliminar clientes por negocio (requiere permisos staff en API)."
+        description="Editar, fusionar o ver historial. Pulsa una fila para abrir el caso."
+        rowHref={(r) => `/dashboard/clientes/${r.id}`}
         toolbar={
           <Button
             size="sm"
