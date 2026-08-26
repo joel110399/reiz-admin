@@ -72,7 +72,9 @@ export function useRetryFailedBusiness(businessId: number) {
         }
       ),
     onSuccess: (payload) => {
-      toast.success(payload.detail || "Reenvío completado");
+      const detail = payload.detail || "Reenvío completado";
+      if (payload.sent > 0 && payload.failed === 0) toast.success(detail);
+      else toast.error(detail);
       invalidateWhatsAppQueries(qc, businessId);
     },
     onError: (err: Error) => toast.error(err.message),
@@ -153,8 +155,8 @@ export function RetryBusinessButton({
     >
       <p className="text-muted-foreground text-xs">
         {hours
-          ? `Reenvía los fallidos de las últimas ${hours} h por el WhatsApp de Reiz.`
-          : "Reenvía los fallidos de este negocio por el WhatsApp de Reiz."}
+          ? `Reenvía los fallidos de las últimas ${hours} h. Usa el WhatsApp del salón si está conectado.`
+          : "Reenvía los fallidos de este negocio. Usa el WhatsApp del salón si está conectado."}
       </p>
       <Button
         type="button"

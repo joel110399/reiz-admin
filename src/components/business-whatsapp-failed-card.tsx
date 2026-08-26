@@ -72,8 +72,8 @@ export function BusinessWhatsAppFailedCard({
         <div className="space-y-1">
           <CardTitle>Mensajes WhatsApp fallidos</CardTitle>
           <CardDescription>
-            Reenvío individual o de todos los fallidos de este negocio. Salen por
-            el WhatsApp de Reiz.
+            Reenvío individual o de todos los fallidos de este negocio. Usa el
+            WhatsApp del salón si está conectado.
           </CardDescription>
         </div>
         <div className="flex flex-wrap items-center gap-2">

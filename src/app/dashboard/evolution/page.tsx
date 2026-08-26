@@ -69,6 +69,7 @@ type FailureRow = {
   created_at: string | null;
   trigger: string;
   provider: string;
+  can_retry?: boolean;
 };
 
 type MessageRow = FailureRow & {
@@ -398,14 +399,14 @@ export default function EvolutionOpsPage() {
                 : `${totalFailed} mensajes no salieron en las últimas 24 h`}
             </CardTitle>
             <CardDescription>
-              Pulsa un negocio para ver cada fallo y reenviarlo, o reenvía todos
-              los de ese negocio. Salen por el WhatsApp de Reiz, no por el número
-              del salón.
+              Pulsa un negocio para ver el historial. Reenviar usa el WhatsApp
+              del salón si está conectado; si no, el de Reiz.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {failedInstances.map((row) => {
-              const last = (row.recent_failures ?? [])[0];
+              const preview = (row.recent_failures ?? []).slice(0, 5);
+              const extra = Math.max(0, row.failed_24h - preview.length);
               return (
                 <div
                   key={`${row.instance}-${row.business_id ?? "x"}-fail`}
@@ -424,23 +425,51 @@ export default function EvolutionOpsPage() {
                           : `${row.failed_24h} fallos`}
                       </p>
                     </div>
-                    {last ? (
-                      <div className="mt-1.5 space-y-1">
-                        <p className="text-muted-foreground text-xs">
-                          {last.template_label}
-                          {last.recipient_name || last.recipient_phone
-                            ? ` → ${[last.recipient_name, last.recipient_phone]
-                                .filter(Boolean)
-                                .join(" · ")}`
-                            : null}
-                          {last.created_at ? ` · ${fmtWhen(last.created_at)}` : null}
-                        </p>
-                        <p className="text-destructive text-sm leading-snug">
-                          {last.error_message}
-                        </p>
-                      </div>
-                    ) : null}
                   </button>
+                  {preview.length > 0 ? (
+                    <ul className="space-y-2 border-t border-destructive/10 px-3 py-2">
+                      {preview.map((fail) => (
+                        <li
+                          key={fail.id}
+                          className="flex flex-wrap items-start justify-between gap-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-muted-foreground text-xs">
+                              {fail.template_label}
+                              {fail.recipient_name || fail.recipient_phone
+                                ? ` → ${[fail.recipient_name, fail.recipient_phone]
+                                    .filter(Boolean)
+                                    .join(" · ")}`
+                                : null}
+                              {fail.created_at
+                                ? ` · ${fmtWhen(fail.created_at)}`
+                                : null}
+                            </p>
+                            <p className="text-destructive mt-0.5 text-sm leading-snug">
+                              {fail.error_message}
+                            </p>
+                          </div>
+                          {row.business_id && fail.can_retry ? (
+                            <RetryMessageButton
+                              logId={fail.id}
+                              businessId={row.business_id}
+                            />
+                          ) : null}
+                        </li>
+                      ))}
+                      {extra > 0 ? (
+                        <li>
+                          <button
+                            type="button"
+                            className="text-muted-foreground text-xs hover:underline"
+                            onClick={() => openInstance(row, "failed")}
+                          >
+                            Ver {extra === 1 ? "1 fallo más" : `${extra} fallos más`}
+                          </button>
+                        </li>
+                      ) : null}
+                    </ul>
+                  ) : null}
                   {row.business_id ? (
                     <div className="border-t border-destructive/10 px-3 py-2">
                       <RetryBusinessButton
