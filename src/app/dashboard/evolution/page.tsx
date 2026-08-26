@@ -51,6 +51,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { RetryBusinessButton, RetryMessageButton } from "@/components/whatsapp-failed-retry";
 import { cn } from "@/lib/utils";
 import type { Paginated } from "@/types/drf";
 
@@ -75,6 +76,7 @@ type MessageRow = FailureRow & {
   sent_at: string | null;
   status: MessageStatus;
   direction: string;
+  can_retry?: boolean;
 };
 
 type MessagesPayload = Paginated<MessageRow> & {
@@ -396,44 +398,59 @@ export default function EvolutionOpsPage() {
                 : `${totalFailed} mensajes no salieron en las últimas 24 h`}
             </CardTitle>
             <CardDescription>
-              Pulsa un negocio para ver el desglose y el motivo de cada fallo.
+              Pulsa un negocio para ver cada fallo y reenviarlo, o reenvía todos
+              los de ese negocio. Salen por el WhatsApp de Reiz, no por el número
+              del salón.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {failedInstances.map((row) => {
               const last = (row.recent_failures ?? [])[0];
               return (
-                <button
+                <div
                   key={`${row.instance}-${row.business_id ?? "x"}-fail`}
-                  type="button"
-                  onClick={() => openInstance(row, "failed")}
-                  className="w-full rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-3 text-left transition hover:bg-destructive/10"
+                  className="rounded-lg border border-destructive/20 bg-destructive/5"
                 >
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className="font-medium">{instanceTitle(row)}</p>
-                    <p className="text-destructive text-xs font-medium">
-                      {row.failed_24h === 1
-                        ? "1 fallo"
-                        : `${row.failed_24h} fallos`}
-                    </p>
-                  </div>
-                  {last ? (
-                    <div className="mt-1.5 space-y-1">
-                      <p className="text-muted-foreground text-xs">
-                        {last.template_label}
-                        {last.recipient_name || last.recipient_phone
-                          ? ` → ${[last.recipient_name, last.recipient_phone]
-                              .filter(Boolean)
-                              .join(" · ")}`
-                          : null}
-                        {last.created_at ? ` · ${fmtWhen(last.created_at)}` : null}
-                      </p>
-                      <p className="text-destructive text-sm leading-snug">
-                        {last.error_message}
+                  <button
+                    type="button"
+                    onClick={() => openInstance(row, "failed")}
+                    className="w-full px-3 py-3 text-left transition hover:bg-destructive/10"
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <p className="font-medium">{instanceTitle(row)}</p>
+                      <p className="text-destructive text-xs font-medium">
+                        {row.failed_24h === 1
+                          ? "1 fallo"
+                          : `${row.failed_24h} fallos`}
                       </p>
                     </div>
+                    {last ? (
+                      <div className="mt-1.5 space-y-1">
+                        <p className="text-muted-foreground text-xs">
+                          {last.template_label}
+                          {last.recipient_name || last.recipient_phone
+                            ? ` → ${[last.recipient_name, last.recipient_phone]
+                                .filter(Boolean)
+                                .join(" · ")}`
+                            : null}
+                          {last.created_at ? ` · ${fmtWhen(last.created_at)}` : null}
+                        </p>
+                        <p className="text-destructive text-sm leading-snug">
+                          {last.error_message}
+                        </p>
+                      </div>
+                    ) : null}
+                  </button>
+                  {row.business_id ? (
+                    <div className="border-t border-destructive/10 px-3 py-2">
+                      <RetryBusinessButton
+                        businessId={row.business_id}
+                        failedCount={row.failed_24h}
+                        hours={24}
+                      />
+                    </div>
                   ) : null}
-                </button>
+                </div>
               );
             })}
           </CardContent>
@@ -869,6 +886,7 @@ export default function EvolutionOpsPage() {
                     key={`${selected.business_id}-${openFilter}`}
                     businessId={selected.business_id}
                     initialStatus={openFilter}
+                    failedCount={selected.failed_24h}
                   />
                 ) : (
                   <p className="text-muted-foreground text-sm">
@@ -906,9 +924,11 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 function InstanceMessages({
   businessId,
   initialStatus,
+  failedCount,
 }: {
   businessId: number;
   initialStatus: MessageFilter;
+  failedCount: number;
 }) {
   const [status, setStatus] = React.useState<MessageFilter>(initialStatus);
   const [page, setPage] = React.useState(1);
@@ -946,9 +966,17 @@ function InstanceMessages({
 
   return (
     <div className="space-y-3">
-      <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
-        Mensajes
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
+          Mensajes
+        </p>
+        {counts.failed > 0 || failedCount > 0 ? (
+          <RetryBusinessButton
+            businessId={businessId}
+            failedCount={counts.failed || failedCount}
+          />
+        ) : null}
+      </div>
       <div className="flex flex-wrap gap-1.5">
         {filters.map((filter) => (
           <Button
@@ -997,17 +1025,25 @@ function InstanceMessages({
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <p className="text-sm font-medium">{row.template_label}</p>
-                  <Badge
-                    variant={
-                      row.status === "failed"
-                        ? "destructive"
-                        : row.status === "sent"
-                          ? "default"
-                          : "secondary"
-                    }
-                  >
-                    {LOG_STATUS_LABEL[row.status]}
-                  </Badge>
+                  <div className="flex items-center gap-1.5">
+                    <Badge
+                      variant={
+                        row.status === "failed"
+                          ? "destructive"
+                          : row.status === "sent"
+                            ? "default"
+                            : "secondary"
+                      }
+                    >
+                      {LOG_STATUS_LABEL[row.status]}
+                    </Badge>
+                    {row.status === "failed" && row.can_retry ? (
+                      <RetryMessageButton
+                        logId={row.id}
+                        businessId={businessId}
+                      />
+                    ) : null}
+                  </div>
                 </div>
                 <p className="text-muted-foreground mt-0.5 text-xs">
                   {[row.recipient_name, row.recipient_phone]

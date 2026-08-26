@@ -79,7 +79,7 @@ const NAV_HITS: SearchHit[] = [
     kind: "booking",
     id: 0,
     title: "WhatsApp Evolution",
-    subtitle: "Instancias y mensajes",
+    subtitle: "Instancias, fallos y reenvío",
     href: "/dashboard/evolution",
   },
 ];

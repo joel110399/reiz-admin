@@ -11,6 +11,7 @@ import { ActiveBadge } from "@/components/status-badge";
 import { GoldieImportPanel } from "@/components/goldie-import-panel";
 import { ServiceCategoryManager } from "@/components/service-category-manager";
 import { AdvancePaymentCard } from "@/components/advance-payment-card";
+import { BusinessWhatsAppFailedCard } from "@/components/business-whatsapp-failed-card";
 import {
   Card,
   CardContent,
@@ -398,6 +399,8 @@ export default function NegocioDetailPage() {
             notifyPhone={biz.advance_payment_notify_phone}
             accounts={biz.bank_accounts ?? []}
           />
+
+          <BusinessWhatsAppFailedCard businessId={biz.id} />
 
           <Card>
             <CardHeader>
