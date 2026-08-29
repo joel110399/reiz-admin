@@ -70,6 +70,8 @@ type FailureRow = {
   trigger: string;
   provider: string;
   can_retry?: boolean;
+  /** "lost" = recordatorio que se pasó de hora sin salir, no un fallo del proveedor. */
+  kind?: string;
 };
 
 type MessageRow = FailureRow & {
@@ -102,6 +104,7 @@ type InstanceRow = {
   sent_24h: number;
   sent_7d: number;
   failed_24h: number;
+  lost_24h: number;
   last_sent_at: string | null;
   recent_failures?: FailureRow[];
 };
@@ -311,8 +314,13 @@ export default function EvolutionOpsPage() {
   const metrics = digitalocean.metrics;
   const cpuRows = chartRows(digitalocean.series.cpu);
   const memRows = chartRows(digitalocean.series.memory);
-  const failedInstances = evolution.instances.filter((row) => row.failed_24h > 0);
-  const totalFailed = failedInstances.reduce((sum, row) => sum + row.failed_24h, 0);
+  const failedInstances = evolution.instances.filter(
+    (row) => row.failed_24h + (row.lost_24h ?? 0) > 0,
+  );
+  const totalFailed = failedInstances.reduce(
+    (sum, row) => sum + row.failed_24h + (row.lost_24h ?? 0),
+    0,
+  );
 
   return (
     <div className="space-y-8">
@@ -399,14 +407,28 @@ export default function EvolutionOpsPage() {
                 : `${totalFailed} mensajes no salieron en las últimas 24 h`}
             </CardTitle>
             <CardDescription>
-              Pulsa un negocio para ver el historial. Reenviar usa el WhatsApp
-              del salón si está conectado; si no, el de Reiz.
+              Los fallos los rechazó WhatsApp y se pueden reenviar. Los marcados
+              como sin enviar son recordatorios que se pasaron de hora porque el
+              canal estaba en su tope: ya no se reenvían. Pulsa un negocio para
+              ver el historial.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {failedInstances.map((row) => {
               const preview = (row.recent_failures ?? []).slice(0, 5);
-              const extra = Math.max(0, row.failed_24h - preview.length);
+              const lost = row.lost_24h ?? 0;
+              const total = row.failed_24h + lost;
+              const extra = Math.max(0, total - preview.length);
+              const countLabel = [
+                row.failed_24h > 0
+                  ? row.failed_24h === 1
+                    ? "1 fallo"
+                    : `${row.failed_24h} fallos`
+                  : "",
+                lost > 0 ? (lost === 1 ? "1 sin enviar" : `${lost} sin enviar`) : "",
+              ]
+                .filter(Boolean)
+                .join(" · ");
               return (
                 <div
                   key={`${row.instance}-${row.business_id ?? "x"}-fail`}
@@ -420,9 +442,7 @@ export default function EvolutionOpsPage() {
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <p className="font-medium">{instanceTitle(row)}</p>
                       <p className="text-destructive text-xs font-medium">
-                        {row.failed_24h === 1
-                          ? "1 fallo"
-                          : `${row.failed_24h} fallos`}
+                        {countLabel}
                       </p>
                     </div>
                   </button>
@@ -435,6 +455,11 @@ export default function EvolutionOpsPage() {
                         >
                           <div className="min-w-0 flex-1">
                             <p className="text-muted-foreground text-xs">
+                              {fail.kind === "lost" ? (
+                                <span className="mr-1 rounded bg-amber-500/15 px-1.5 py-0.5 font-medium text-amber-700 dark:text-amber-500">
+                                  Sin enviar
+                                </span>
+                              ) : null}
                               {fail.template_label}
                               {fail.recipient_name || fail.recipient_phone
                                 ? ` → ${[fail.recipient_name, fail.recipient_phone]
@@ -445,7 +470,13 @@ export default function EvolutionOpsPage() {
                                 ? ` · ${fmtWhen(fail.created_at)}`
                                 : null}
                             </p>
-                            <p className="text-destructive mt-0.5 text-sm leading-snug">
+                            <p
+                              className={`mt-0.5 text-sm leading-snug ${
+                                fail.kind === "lost"
+                                  ? "text-amber-700 dark:text-amber-500"
+                                  : "text-destructive"
+                              }`}
+                            >
                               {fail.error_message}
                             </p>
                           </div>
@@ -464,13 +495,13 @@ export default function EvolutionOpsPage() {
                             className="text-muted-foreground text-xs hover:underline"
                             onClick={() => openInstance(row, "failed")}
                           >
-                            Ver {extra === 1 ? "1 fallo más" : `${extra} fallos más`}
+                            Ver {extra === 1 ? "1 más" : `${extra} más`}
                           </button>
                         </li>
                       ) : null}
                     </ul>
                   ) : null}
-                  {row.business_id ? (
+                  {row.business_id && row.failed_24h > 0 ? (
                     <div className="border-t border-destructive/10 px-3 py-2">
                       <RetryBusinessButton
                         businessId={row.business_id}
@@ -1064,7 +1095,9 @@ function InstanceMessages({
                             : "secondary"
                       }
                     >
-                      {LOG_STATUS_LABEL[row.status]}
+                      {row.kind === "lost"
+                        ? "Sin enviar"
+                        : LOG_STATUS_LABEL[row.status]}
                     </Badge>
                     {row.status === "failed" && row.can_retry ? (
                       <RetryMessageButton
@@ -1080,8 +1113,16 @@ function InstanceMessages({
                     .join(" · ") || "Sin destinatario"}
                   {row.created_at ? ` · ${fmtWhen(row.created_at)}` : ""}
                 </p>
-                {row.status === "failed" && row.error_message ? (
-                  <p className="text-destructive mt-2 text-sm leading-snug">
+                {(row.status === "failed" || row.kind === "lost") &&
+                row.error_message ? (
+                  <p
+                    className={cn(
+                      "mt-2 text-sm leading-snug",
+                      row.kind === "lost"
+                        ? "text-amber-700 dark:text-amber-500"
+                        : "text-destructive"
+                    )}
+                  >
                     {row.error_message}
                   </p>
                 ) : null}
