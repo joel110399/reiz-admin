@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import {
@@ -15,7 +15,8 @@ import {
   HardDrive,
   Info,
   MessageCircle,
-  Phone,
+  Pause,
+  Play,
   RefreshCw,
   RotateCcw,
   Send,
@@ -100,6 +101,20 @@ type MessagesPayload = Paginated<MessageRow> & {
   counts: { all: number; sent: number; failed: number; skipped: number };
 };
 
+type QuotaInfo = {
+  channel_key: string;
+  exists: boolean;
+  paused: boolean;
+  paused_until?: string | null;
+  pause_reason?: string;
+  warmup_day: number | null;
+  daily_cap: number;
+  hourly_cap: number;
+  sent_today: number;
+  sent_this_hour: number;
+  deferred_count?: number;
+};
+
 type InstanceRow = {
   business_id: number | null;
   business_name: string;
@@ -117,12 +132,42 @@ type InstanceRow = {
   healthy: boolean;
   needs_repair?: boolean;
   disconnect_reason?: number | null;
+  disconnect_at?: string | null;
   sent_24h: number;
   sent_7d: number;
   failed_24h: number;
   lost_24h: number;
   last_sent_at: string | null;
   recent_failures?: FailureRow[];
+  quota?: QuotaInfo | null;
+};
+
+type SnapshotPayload = {
+  instance: string;
+  state: string | null;
+  state_error: string | null;
+  disconnect_reason: number | null;
+  disconnect_at: string | null;
+  needs_repair: boolean;
+  webhook: {
+    ok: boolean;
+    error: string;
+    url: string;
+    enabled: boolean;
+    expected_url: string;
+    matches: boolean;
+  };
+  settings: {
+    ok: boolean;
+    error: string;
+    alwaysOnline?: boolean;
+    syncFullHistory?: boolean;
+    readMessages?: boolean;
+    readStatus?: boolean;
+    rejectCall?: boolean;
+    groupsIgnore?: boolean;
+  };
+  quota: QuotaInfo | null;
 };
 
 type DiagCheck = {
@@ -223,6 +268,24 @@ function fmtWhen(iso: string | null) {
   return d.toLocaleString("es", { dateStyle: "short", timeStyle: "short" });
 }
 
+function fmtAgo(iso: string | null) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const sec = Math.max(0, (Date.now() - d.getTime()) / 1000);
+  if (sec < 60) return "hace un momento";
+  if (sec < 3600) {
+    const m = Math.floor(sec / 60);
+    return m === 1 ? "hace 1 min" : `hace ${m} min`;
+  }
+  if (sec < 86400) {
+    const h = Math.floor(sec / 3600);
+    return h === 1 ? "hace 1 h" : `hace ${h} h`;
+  }
+  const days = Math.floor(sec / 86400);
+  return days === 1 ? "hace 1 día" : `hace ${days} días`;
+}
+
 function fmtNum(n: number | null | undefined, suffix = "") {
   if (n == null || Number.isNaN(n)) return "—";
   return `${n.toLocaleString("es", { maximumFractionDigits: 1 })}${suffix}`;
@@ -268,6 +331,7 @@ function connectionIssue(row: InstanceRow): string | null {
 }
 
 export default function EvolutionOpsPage() {
+  const queryClient = useQueryClient();
   const { data, isLoading, error, refetch, isFetching, dataUpdatedAt } =
     useQuery({
       queryKey: ["staff-evolution-ops"],
@@ -325,7 +389,10 @@ export default function EvolutionOpsPage() {
         business_id: row.business_id,
         instance: row.instance,
       }),
-    onSuccess: (payload) => toast.success(payload.detail || "Socket reiniciado"),
+    onSuccess: (payload) => {
+      toast.success(payload.detail || "Socket reiniciado");
+      void queryClient.invalidateQueries({ queryKey: ["staff-evolution-snapshot"] });
+    },
     onError: (err: Error) => toast.error(err.message),
   });
 
@@ -347,7 +414,10 @@ export default function EvolutionOpsPage() {
         business_id: row.business_id,
         instance: row.instance,
       }),
-    onSuccess: (payload) => toast.success(payload.detail || "Webhook actualizado"),
+    onSuccess: (payload) => {
+      toast.success(payload.detail || "Webhook actualizado");
+      void queryClient.invalidateQueries({ queryKey: ["staff-evolution-snapshot"] });
+    },
     onError: (err: Error) => toast.error(err.message),
   });
 
@@ -357,7 +427,10 @@ export default function EvolutionOpsPage() {
         business_id: row.business_id,
         instance: row.instance,
       }),
-    onSuccess: (payload) => toast.success(payload.detail || "Settings aplicados"),
+    onSuccess: (payload) => {
+      toast.success(payload.detail || "Settings aplicados");
+      void queryClient.invalidateQueries({ queryKey: ["staff-evolution-snapshot"] });
+    },
     onError: (err: Error) => toast.error(err.message),
   });
 
@@ -393,17 +466,74 @@ export default function EvolutionOpsPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const pauseMutation = useMutation({
+    mutationFn: ({
+      row,
+      hours,
+    }: {
+      row: InstanceRow;
+      hours: number;
+    }) =>
+      staffPost<{ detail: string; quota: QuotaInfo }>("pause-channel", {
+        business_id: row.business_id,
+        hours,
+      }),
+    onSuccess: (payload) => {
+      toast.success(payload.detail || "Canal pausado");
+      void queryClient.invalidateQueries({ queryKey: ["staff-evolution-snapshot"] });
+      void refetch();
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const unpauseMutation = useMutation({
+    mutationFn: (row: InstanceRow) =>
+      staffPost<{ detail: string; quota: QuotaInfo }>("unpause-channel", {
+        business_id: row.business_id,
+      }),
+    onSuccess: (payload) => {
+      toast.success(payload.detail || "Pausa levantada");
+      void queryClient.invalidateQueries({ queryKey: ["staff-evolution-snapshot"] });
+      void refetch();
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const snapshotQuery = useQuery({
+    queryKey: [
+      "staff-evolution-snapshot",
+      selected?.instance,
+      selected?.business_id,
+    ],
+    queryFn: () =>
+      staffPost<SnapshotPayload>("snapshot", {
+        business_id: selected?.business_id,
+        instance: selected?.instance,
+      }),
+    enabled: Boolean(
+      selected && (selected.instance || selected.business_id)
+    ),
+  });
+
+  React.useEffect(() => {
+    if (!selected?.instance || !snapshotQuery.data?.state) return;
+    setLiveState((prev) => ({
+      ...prev,
+      [selected.instance]: snapshotQuery.data.state as string,
+    }));
+  }, [selected?.instance, snapshotQuery.data?.state]);
+
   // Live ping por fila
-  async function pingRow(row: InstanceRow) {
+  async function pingRow(row: InstanceRow, silent = false) {
     try {
       const res = await staffPost<{ state: string }>("connection-state", {
         business_id: row.business_id,
         instance: row.instance,
       });
       setLiveState((prev) => ({ ...prev, [row.instance]: res.state ?? "?" }));
-      toast.info(`${row.instance}: ${res.state ?? "?"}`);
+      if (!silent) toast.info(`${row.instance}: ${res.state ?? "?"}`);
     } catch {
-      toast.error("No se pudo consultar el estado");
+      if (!silent) toast.error("No se pudo consultar el estado");
     }
   }
 
@@ -705,6 +835,7 @@ export default function EvolutionOpsPage() {
                   <TableHead>Número</TableHead>
                   <TableHead>Reiz</TableHead>
                   <TableHead>Evolution</TableHead>
+                  <TableHead>Activo</TableHead>
                   <TableHead>24 h</TableHead>
                   <TableHead>7 d</TableHead>
                   <TableHead>Fallos 24 h</TableHead>
@@ -818,6 +949,14 @@ export default function EvolutionOpsPage() {
                           </span>
                         ) : null}
                       </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs">
+                      {row.quota?.paused ? (
+                        <Badge variant="secondary" className="mb-1 text-[10px]">
+                          Pausado
+                        </Badge>
+                      ) : null}
+                      {fmtAgo(row.connected_at) || "—"}
                     </TableCell>
                     <TableCell className="tabular-nums">{row.sent_24h}</TableCell>
                     <TableCell className="tabular-nums">{row.sent_7d}</TableCell>
@@ -1046,16 +1185,31 @@ export default function EvolutionOpsPage() {
                     </Badge>
                     <Badge
                       variant={
-                        selected.evolution_state === "open" ||
-                        selected.evolution_state === "connected"
+                        (snapshotQuery.data?.state ||
+                          liveState[selected.instance] ||
+                          selected.evolution_state) === "open" ||
+                        (snapshotQuery.data?.state ||
+                          liveState[selected.instance] ||
+                          selected.evolution_state) === "connected"
                           ? "default"
                           : "outline"
                       }
                     >
-                      {STATE_LABEL[selected.evolution_state] ||
-                        selected.evolution_state ||
-                        "Sin dato"}
+                      {snapshotQuery.isFetching
+                        ? "Consultando…"
+                        : STATE_LABEL[
+                            snapshotQuery.data?.state ||
+                              liveState[selected.instance] ||
+                              selected.evolution_state
+                          ] ||
+                          snapshotQuery.data?.state ||
+                          liveState[selected.instance] ||
+                          selected.evolution_state ||
+                          "Sin dato"}
                     </Badge>
+                    {selected.quota?.paused || snapshotQuery.data?.quota?.paused ? (
+                      <Badge variant="secondary">Canal pausado</Badge>
+                    ) : null}
                   </div>
                   {connectionIssue(selected) ? (
                     <p className="text-destructive text-sm leading-snug">
@@ -1070,6 +1224,19 @@ export default function EvolutionOpsPage() {
                     <p className="text-xs">
                       Código de vinculación:{" "}
                       <span className="font-mono">{selected.pairing_code}</span>
+                    </p>
+                  ) : null}
+                  {fmtAgo(selected.connected_at) ? (
+                    <p className="text-muted-foreground text-xs">
+                      Vinculado {fmtAgo(selected.connected_at)}
+                      {selected.connected_at
+                        ? ` · ${fmtWhen(selected.connected_at)}`
+                        : ""}
+                    </p>
+                  ) : null}
+                  {snapshotQuery.data?.state_error ? (
+                    <p className="text-destructive text-sm">
+                      {snapshotQuery.data.state_error}
                     </p>
                   ) : null}
                   {/* Actions row */}
@@ -1228,6 +1395,18 @@ export default function EvolutionOpsPage() {
                   </div>
                 ) : null}
 
+                <InstanceLiveDetails
+                  row={selected}
+                  snapshot={snapshotQuery.data}
+                  loading={snapshotQuery.isFetching}
+                  pausePending={pauseMutation.isPending}
+                  unpausePending={unpauseMutation.isPending}
+                  onPause={(hours) =>
+                    pauseMutation.mutate({ row: selected, hours })
+                  }
+                  onUnpause={() => unpauseMutation.mutate(selected)}
+                />
+
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div>
                     <p className="text-muted-foreground text-xs">Enviados 24 h</p>
@@ -1331,6 +1510,197 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="flex items-start justify-between gap-4 border-b border-foreground/5 py-1.5 last:border-0">
       <span className="text-muted-foreground">{label}</span>
       <span className="text-right font-medium">{value}</span>
+    </div>
+  );
+}
+
+function InstanceLiveDetails({
+  row,
+  snapshot,
+  loading,
+  pausePending,
+  unpausePending,
+  onPause,
+  onUnpause,
+}: {
+  row: InstanceRow;
+  snapshot: SnapshotPayload | undefined;
+  loading: boolean;
+  pausePending: boolean;
+  unpausePending: boolean;
+  onPause: (hours: number) => void;
+  onUnpause: () => void;
+}) {
+  const quota = snapshot?.quota ?? row.quota ?? null;
+  const webhook = snapshot?.webhook;
+  const settings = snapshot?.settings;
+  const [hours, setHours] = React.useState("24");
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
+          Webhook y settings
+          {loading ? " · actualizando" : ""}
+        </p>
+        <div className="space-y-2 rounded-lg border border-foreground/10 px-3 py-3 text-sm">
+          <Row
+            label="Webhook"
+            value={
+              webhook
+                ? webhook.ok
+                  ? webhook.enabled
+                    ? webhook.matches
+                      ? "Activo y coincide"
+                      : webhook.url || "Sin URL"
+                    : "Desactivado"
+                  : webhook.error || "Sin dato"
+                : loading
+                  ? "Consultando…"
+                  : "—"
+            }
+          />
+          {webhook?.url ? (
+            <p className="text-muted-foreground break-all text-[11px] leading-snug">
+              {webhook.url}
+            </p>
+          ) : null}
+          {webhook?.expected_url && !webhook.matches ? (
+            <p className="text-amber-700 dark:text-amber-500 text-[11px] leading-snug">
+              Esperado: {webhook.expected_url}
+            </p>
+          ) : null}
+          <Row
+            label="alwaysOnline"
+            value={
+              settings?.ok
+                ? settings.alwaysOnline
+                  ? "Sí"
+                  : "No"
+                : settings?.error || (loading ? "…" : "—")
+            }
+          />
+          <Row
+            label="syncFullHistory"
+            value={
+              settings?.ok
+                ? settings.syncFullHistory
+                  ? "Sí"
+                  : "No"
+                : "—"
+            }
+          />
+          <Row
+            label="groupsIgnore"
+            value={
+              settings?.ok ? (settings.groupsIgnore ? "Sí" : "No") : "—"
+            }
+          />
+          {snapshot?.disconnect_reason ? (
+            <Row
+              label="Última desconexión"
+              value={`${snapshot.disconnect_reason}${
+                snapshot.disconnect_at
+                  ? ` · ${fmtWhen(snapshot.disconnect_at)}`
+                  : ""
+              }`}
+            />
+          ) : row.disconnect_reason ? (
+            <Row
+              label="Última desconexión"
+              value={`${row.disconnect_reason}${
+                row.disconnect_at ? ` · ${fmtWhen(row.disconnect_at)}` : ""
+              }`}
+            />
+          ) : null}
+        </div>
+      </div>
+
+      {row.business_id ? (
+        <div className="space-y-2">
+          <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
+            Cuota del canal
+          </p>
+          <div
+            className={cn(
+              "space-y-2 rounded-lg border px-3 py-3 text-sm",
+              quota?.paused
+                ? "border-amber-500/30 bg-amber-500/5"
+                : "border-foreground/10"
+            )}
+          >
+            {quota ? (
+              <>
+                <Row
+                  label="Hoy"
+                  value={`${quota.sent_today} / ${quota.daily_cap}`}
+                />
+                <Row
+                  label="Esta hora"
+                  value={`${quota.sent_this_hour} / ${quota.hourly_cap}`}
+                />
+                <Row
+                  label="Calentamiento"
+                  value={
+                    quota.warmup_day
+                      ? `Día ${quota.warmup_day}`
+                      : "Sin rampa"
+                  }
+                />
+                {quota.paused ? (
+                  <>
+                    <p className="text-amber-800 dark:text-amber-400 text-xs leading-snug">
+                      Pausado hasta {fmtWhen(quota.paused_until ?? null)}
+                      {quota.pause_reason ? ` · ${quota.pause_reason}` : ""}
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={unpausePending}
+                      onClick={onUnpause}
+                    >
+                      <Play className="size-3.5" />
+                      {unpausePending ? "Levantando…" : "Levantar pausa"}
+                    </Button>
+                  </>
+                ) : (
+                  <div className="flex flex-wrap items-end gap-2 pt-1">
+                    <div className="space-y-1">
+                      <Label htmlFor="pause-hours" className="text-xs">
+                        Horas
+                      </Label>
+                      <Input
+                        id="pause-hours"
+                        className="h-8 w-20 text-sm"
+                        value={hours}
+                        onChange={(e) => setHours(e.target.value)}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={pausePending}
+                      onClick={() => {
+                        const n = Number.parseInt(hours, 10);
+                        onPause(Number.isFinite(n) && n > 0 ? Math.min(n, 168) : 24);
+                      }}
+                    >
+                      <Pause className="size-3.5" />
+                      {pausePending ? "Pausando…" : "Pausar canal"}
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-muted-foreground text-xs">
+                Todavía no hay cuota (se crea con el primer envío).
+              </p>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
