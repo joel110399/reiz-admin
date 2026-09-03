@@ -7,15 +7,26 @@ import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import {
   Activity,
+  AlertTriangle,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Cpu,
   HardDrive,
+  Info,
   MessageCircle,
+  Phone,
   RefreshCw,
+  RotateCcw,
+  Send,
   Server,
+  Settings2,
+  Stethoscope,
   Unplug,
+  Webhook,
   Wifi,
+  Wrench,
+  Zap,
 } from "lucide-react";
 
 import { KpiStatCard } from "@/components/dashboard/kpi-stat-card";
@@ -51,6 +62,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { RetryBusinessButton, RetryMessageButton } from "@/components/whatsapp-failed-retry";
 import { cn } from "@/lib/utils";
 import type { Paginated } from "@/types/drf";
@@ -109,6 +123,19 @@ type InstanceRow = {
   lost_24h: number;
   last_sent_at: string | null;
   recent_failures?: FailureRow[];
+};
+
+type DiagCheck = {
+  label: string;
+  status: "ok" | "warn" | "error";
+  detail: string;
+};
+
+type DiagResult = {
+  instance: string;
+  overall: "ok" | "warn" | "error";
+  checks: DiagCheck[];
+  live: { state: string | null; disconnect_reason: number | null; needs_repair: boolean };
 };
 
 type SeriesPoint = { ts: number; value: number };
@@ -251,25 +278,38 @@ export default function EvolutionOpsPage() {
   const [selected, setSelected] = React.useState<InstanceRow | null>(null);
   const [openFilter, setOpenFilter] = React.useState<MessageFilter>("all");
   const [confirmClose, setConfirmClose] = React.useState(false);
+  const [liveState, setLiveState] = React.useState<Record<string, string>>({});
+  // probe state
+  const [probePhone, setProbePhone] = React.useState("");
+  const [probeBody, setProbeBody] = React.useState("");
+  // diag state
+  const [diagResult, setDiagResult] = React.useState<DiagResult | null>(null);
+  // filter
+  const [filterSearch, setFilterSearch] = React.useState("");
+  const [filterState, setFilterState] = React.useState<"all" | "healthy" | "error">("all");
 
   function openInstance(row: InstanceRow, filter: MessageFilter = "all") {
     setOpenFilter(filter);
     setConfirmClose(false);
     setSelected(row);
+    setProbePhone("");
+    setProbeBody("");
+    setDiagResult(null);
+  }
+
+  function staffPost<T>(path: string, body: object) {
+    return apiJson<T & { detail?: string }>(`/api/notifications/staff/evolution-ops/${path}/`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   }
 
   const disconnectMutation = useMutation({
     mutationFn: (row: InstanceRow) =>
-      apiJson<{ detail: string }>(
-        "/api/notifications/staff/evolution-ops/disconnect/",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            business_id: row.business_id,
-            instance: row.instance,
-          }),
-        }
-      ),
+      staffPost<{ detail: string }>("disconnect", {
+        business_id: row.business_id,
+        instance: row.instance,
+      }),
     onSuccess: (payload) => {
       toast.success(payload.detail || "Conexión cerrada");
       setConfirmClose(false);
@@ -278,6 +318,94 @@ export default function EvolutionOpsPage() {
     },
     onError: (err: Error) => toast.error(err.message),
   });
+
+  const restartMutation = useMutation({
+    mutationFn: (row: InstanceRow) =>
+      staffPost<{ detail: string }>("restart", {
+        business_id: row.business_id,
+        instance: row.instance,
+      }),
+    onSuccess: (payload) => toast.success(payload.detail || "Socket reiniciado"),
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const repairMutation = useMutation({
+    mutationFn: (row: InstanceRow) =>
+      staffPost<{ detail: string; pairing_code?: string }>("repair", {
+        business_id: row.business_id,
+      }),
+    onSuccess: (payload) => {
+      toast.success(payload.detail || "Re-vinculación iniciada");
+      void refetch();
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const webhookMutation = useMutation({
+    mutationFn: (row: InstanceRow) =>
+      staffPost<{ detail: string; webhook_url?: string }>("set-webhook", {
+        business_id: row.business_id,
+        instance: row.instance,
+      }),
+    onSuccess: (payload) => toast.success(payload.detail || "Webhook actualizado"),
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const settingsMutation = useMutation({
+    mutationFn: (row: InstanceRow) =>
+      staffPost<{ detail: string }>("set-settings", {
+        business_id: row.business_id,
+        instance: row.instance,
+      }),
+    onSuccess: (payload) => toast.success(payload.detail || "Settings aplicados"),
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const probeMutation = useMutation({
+    mutationFn: ({ row, phone, body }: { row: InstanceRow; phone: string; body: string }) =>
+      staffPost<{ detail: string }>("send-probe", {
+        business_id: row.business_id,
+        instance: row.instance,
+        phone,
+        body,
+      }),
+    onSuccess: (payload) => toast.success(payload.detail || "Mensaje enviado"),
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const diagnoseMutation = useMutation({
+    mutationFn: (row: InstanceRow) =>
+      staffPost<DiagResult>("diagnose", {
+        business_id: row.business_id,
+        instance: row.instance,
+      }),
+    onSuccess: (payload) => setDiagResult(payload),
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const healAllMutation = useMutation({
+    mutationFn: () =>
+      staffPost<{ detail: string; stats: Record<string, number> }>("heal-all", {}),
+    onSuccess: (payload) => {
+      toast.success(payload.detail || "Heal-all completado");
+      void refetch();
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // Live ping por fila
+  async function pingRow(row: InstanceRow) {
+    try {
+      const res = await staffPost<{ state: string }>("connection-state", {
+        business_id: row.business_id,
+        instance: row.instance,
+      });
+      setLiveState((prev) => ({ ...prev, [row.instance]: res.state ?? "?" }));
+      toast.info(`${row.instance}: ${res.state ?? "?"}`);
+    } catch {
+      toast.error("No se pudo consultar el estado");
+    }
+  }
 
   const canDisconnect = Boolean(
     selected &&
@@ -342,7 +470,7 @@ export default function EvolutionOpsPage() {
             DigitalOcean. Se actualiza cada 30 s.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-muted-foreground text-xs">
             {dataUpdatedAt
               ? `Actualizado ${new Date(dataUpdatedAt).toLocaleTimeString("es")}`
@@ -356,6 +484,15 @@ export default function EvolutionOpsPage() {
           >
             <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
             Actualizar
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => healAllMutation.mutate()}
+            disabled={healAllMutation.isPending}
+          >
+            <Zap className="size-3.5" />
+            {healAllMutation.isPending ? "Reparando…" : "Heal-All"}
           </Button>
         </div>
       </header>
@@ -524,12 +661,35 @@ export default function EvolutionOpsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Números conectados</CardTitle>
-          <CardDescription>
-            Combina lo guardado en Reiz con el estado live de Evolution. Pulsa
-            una fila para ver todos los mensajes; en Fallos 24 h ves el motivo.
-            Las huérfanas existen en el servidor y no en un negocio.
-          </CardDescription>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>Números conectados</CardTitle>
+              <CardDescription>
+                Combina lo guardado en Reiz con el estado live de Evolution. Pulsa
+                una fila para ver todos los mensajes; en Fallos 24 h ves el motivo.
+                Las huérfanas existen en el servidor y no en un negocio.
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Input
+                className="h-8 w-48 text-sm"
+                placeholder="Buscar negocio…"
+                value={filterSearch}
+                onChange={(e) => setFilterSearch(e.target.value)}
+              />
+              {(["all", "healthy", "error"] as const).map((f) => (
+                <Button
+                  key={f}
+                  type="button"
+                  size="sm"
+                  variant={filterState === f ? "default" : "outline"}
+                  onClick={() => setFilterState(f)}
+                >
+                  {f === "all" ? "Todas" : f === "healthy" ? "Sanas" : "Con error"}
+                </Button>
+              ))}
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {evolution.instances.length === 0 ? (
@@ -552,9 +712,25 @@ export default function EvolutionOpsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {evolution.instances.map((row) => {
+                {evolution.instances
+                  .filter((row) => {
+                    if (filterSearch) {
+                      const q = filterSearch.toLowerCase();
+                      if (
+                        !row.business_name.toLowerCase().includes(q) &&
+                        !row.instance.toLowerCase().includes(q) &&
+                        !(row.phone || "").includes(q) &&
+                        !(row.owner_email || "").toLowerCase().includes(q)
+                      ) return false;
+                    }
+                    if (filterState === "healthy") return row.healthy;
+                    if (filterState === "error") return !row.healthy;
+                    return true;
+                  })
+                  .map((row) => {
                   const issue = connectionIssue(row);
                   const lastFail = (row.recent_failures ?? [])[0];
+                  const liveSt = liveState[row.instance];
                   return (
                   <TableRow
                     key={`${row.instance}-${row.business_id ?? "x"}`}
@@ -607,18 +783,35 @@ export default function EvolutionOpsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
-                        <Badge
-                          variant={
-                            row.evolution_state === "open" ||
-                            row.evolution_state === "connected"
-                              ? "default"
-                              : "outline"
-                          }
-                        >
-                          {STATE_LABEL[row.evolution_state] ||
-                            row.evolution_state ||
-                            "Sin dato"}
-                        </Badge>
+                        <div className="flex flex-wrap gap-1">
+                          <Badge
+                            variant={
+                              row.evolution_state === "open" ||
+                              row.evolution_state === "connected"
+                                ? "default"
+                                : "outline"
+                            }
+                          >
+                            {liveSt
+                              ? STATE_LABEL[liveSt] || liveSt
+                              : STATE_LABEL[row.evolution_state] ||
+                                row.evolution_state ||
+                                "Sin dato"}
+                          </Badge>
+                          {row.needs_repair ? (
+                            <Badge variant="destructive" className="text-[10px]">
+                              401
+                            </Badge>
+                          ) : null}
+                          <button
+                            type="button"
+                            title="Ping estado live"
+                            onClick={(e) => { e.stopPropagation(); void pingRow(row); }}
+                            className="text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <Zap className="size-3" />
+                          </button>
+                        </div>
                         {issue ? (
                           <span className="text-destructive max-w-40 text-[11px] leading-snug">
                             {issue}
@@ -879,18 +1072,92 @@ export default function EvolutionOpsPage() {
                       <span className="font-mono">{selected.pairing_code}</span>
                     </p>
                   ) : null}
-                  {canDisconnect && !confirmClose ? (
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      className="mt-2"
-                      onClick={() => setConfirmClose(true)}
-                    >
-                      <Unplug className="size-3.5" />
-                      Cerrar conexión
-                    </Button>
-                  ) : null}
+                  {/* Actions row */}
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {/* Restart socket */}
+                    {selected.in_evolution && !selected.needs_repair ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={restartMutation.isPending}
+                        onClick={() => restartMutation.mutate(selected)}
+                      >
+                        <RotateCcw className="size-3.5" />
+                        {restartMutation.isPending ? "Reiniciando…" : "Restart socket"}
+                      </Button>
+                    ) : null}
+
+                    {/* Repair (re-pairing) */}
+                    {selected.needs_repair && selected.business_id ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={repairMutation.isPending}
+                        onClick={() => repairMutation.mutate(selected)}
+                      >
+                        <Wrench className="size-3.5" />
+                        {repairMutation.isPending ? "Re-vinculando…" : "Re-vincular"}
+                      </Button>
+                    ) : null}
+
+                    {/* Set webhook */}
+                    {selected.in_evolution ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={webhookMutation.isPending}
+                        onClick={() => webhookMutation.mutate(selected)}
+                      >
+                        <Webhook className="size-3.5" />
+                        {webhookMutation.isPending ? "Aplicando…" : "Webhook"}
+                      </Button>
+                    ) : null}
+
+                    {/* Set settings */}
+                    {selected.in_evolution ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={settingsMutation.isPending}
+                        onClick={() => settingsMutation.mutate(selected)}
+                      >
+                        <Settings2 className="size-3.5" />
+                        {settingsMutation.isPending ? "Aplicando…" : "Settings"}
+                      </Button>
+                    ) : null}
+
+                    {/* Diagnose */}
+                    {selected.in_evolution ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={diagnoseMutation.isPending}
+                        onClick={() => diagnoseMutation.mutate(selected)}
+                      >
+                        <Stethoscope className="size-3.5" />
+                        {diagnoseMutation.isPending ? "Diagnosticando…" : "Diagnóstico"}
+                      </Button>
+                    ) : null}
+
+                    {/* Close / disconnect */}
+                    {canDisconnect && !confirmClose ? (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setConfirmClose(true)}
+                      >
+                        <Unplug className="size-3.5" />
+                        Cerrar conexión
+                      </Button>
+                    ) : null}
+                  </div>
+
                   {canDisconnect && confirmClose ? (
                     <div className="mt-3 space-y-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-3">
                       <p className="text-sm leading-snug">
@@ -924,6 +1191,43 @@ export default function EvolutionOpsPage() {
                   ) : null}
                 </div>
 
+                {/* Diagnose result */}
+                {diagResult ? (
+                  <div className="space-y-2">
+                    <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
+                      Diagnóstico
+                    </p>
+                    <div
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-sm",
+                        diagResult.overall === "ok"
+                          ? "border-green-500/30 bg-green-500/5"
+                          : diagResult.overall === "warn"
+                            ? "border-amber-500/30 bg-amber-500/5"
+                            : "border-destructive/30 bg-destructive/5"
+                      )}
+                    >
+                      <ul className="space-y-1.5">
+                        {diagResult.checks.map((c) => (
+                          <li key={c.label} className="flex gap-2">
+                            {c.status === "ok" ? (
+                              <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-green-600" />
+                            ) : c.status === "warn" ? (
+                              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-600" />
+                            ) : (
+                              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-destructive" />
+                            )}
+                            <div>
+                              <p className="font-medium">{c.label}</p>
+                              <p className="text-muted-foreground text-xs whitespace-pre-line">{c.detail}</p>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                ) : null}
+
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div>
                     <p className="text-muted-foreground text-xs">Enviados 24 h</p>
@@ -945,6 +1249,51 @@ export default function EvolutionOpsPage() {
                     </p>
                   </div>
                 </div>
+
+                {/* Send probe form */}
+                {selected.in_evolution ? (
+                  <div className="space-y-2 rounded-lg border border-foreground/10 bg-muted/30 px-3 py-3">
+                    <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
+                      Test de envío en vivo
+                    </p>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="probe-phone" className="text-xs">Teléfono destino</Label>
+                      <Input
+                        id="probe-phone"
+                        placeholder="+1 809 000 0000"
+                        value={probePhone}
+                        onChange={(e) => setProbePhone(e.target.value)}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="probe-body" className="text-xs">Mensaje (opcional)</Label>
+                      <Textarea
+                        id="probe-body"
+                        placeholder="Mensaje de prueba…"
+                        value={probeBody}
+                        onChange={(e) => setProbeBody(e.target.value)}
+                        rows={2}
+                        className="text-sm"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={probeMutation.isPending || !probePhone.trim()}
+                      onClick={() =>
+                        probeMutation.mutate({
+                          row: selected,
+                          phone: probePhone,
+                          body: probeBody,
+                        })
+                      }
+                    >
+                      <Send className="size-3.5" />
+                      {probeMutation.isPending ? "Enviando…" : "Enviar prueba"}
+                    </Button>
+                  </div>
+                ) : null}
 
                 {selected.business_id ? (
                   <InstanceMessages
