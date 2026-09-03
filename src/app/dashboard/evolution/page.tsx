@@ -101,6 +101,8 @@ type InstanceRow = {
   in_reiz: boolean;
   in_evolution: boolean;
   healthy: boolean;
+  needs_repair?: boolean;
+  disconnect_reason?: number | null;
   sent_24h: number;
   sent_7d: number;
   failed_24h: number;
@@ -228,6 +230,9 @@ function connectionIssue(row: InstanceRow): string | null {
   }
   if (row.connect_status === "idle") {
     return "No hay un WhatsApp vinculado.";
+  }
+  if (row.needs_repair || row.disconnect_reason === 401) {
+    return "WhatsApp invalidó la sesión (401). Hay que volver a vincular el número; no basta con reconectar en Reiz.";
   }
   if (row.evolution_state === "close") {
     return "El socket de WhatsApp está cerrado. Hay que volver a conectar el número.";
