@@ -66,6 +66,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ConnectEvolutionCard } from "@/components/connect-evolution-card";
 import { RetryBusinessButton, RetryMessageButton } from "@/components/whatsapp-failed-retry";
 import { cn } from "@/lib/utils";
 import type { Paginated } from "@/types/drf";
@@ -626,6 +627,8 @@ export default function EvolutionOpsPage() {
           </Button>
         </div>
       </header>
+
+      <ConnectEvolutionCard />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiStatCard

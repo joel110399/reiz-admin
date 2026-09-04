@@ -12,6 +12,7 @@ import { GoldieImportPanel } from "@/components/goldie-import-panel";
 import { ServiceCategoryManager } from "@/components/service-category-manager";
 import { AdvancePaymentCard } from "@/components/advance-payment-card";
 import { BusinessWhatsAppFailedCard } from "@/components/business-whatsapp-failed-card";
+import { ConnectEvolutionCard } from "@/components/connect-evolution-card";
 import {
   Card,
   CardContent,
@@ -398,6 +399,12 @@ export default function NegocioDetailPage() {
             amount={biz.advance_payment_amount}
             notifyPhone={biz.advance_payment_notify_phone}
             accounts={biz.bank_accounts ?? []}
+          />
+
+          <ConnectEvolutionCard
+            businessId={biz.id}
+            businessName={biz.name}
+            defaultPhone={biz.phone || ""}
           />
 
           <BusinessWhatsAppFailedCard businessId={biz.id} />
