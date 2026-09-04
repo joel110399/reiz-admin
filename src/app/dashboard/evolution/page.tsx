@@ -66,7 +66,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ConnectEvolutionCard } from "@/components/connect-evolution-card";
+import { ConnectPlatformEvolutionCard } from "@/components/connect-platform-evolution-card";
+import type { PlatformChannel } from "@/components/connect-platform-evolution-card";
 import { RetryBusinessButton, RetryMessageButton } from "@/components/whatsapp-failed-retry";
 import { cn } from "@/lib/utils";
 import type { Paginated } from "@/types/drf";
@@ -196,6 +197,7 @@ type OpsPayload = {
     connected_count: number;
     open_count: number;
     instances: InstanceRow[];
+    platform?: PlatformChannel | null;
   };
   digitalocean: {
     configured: boolean;
@@ -628,7 +630,7 @@ export default function EvolutionOpsPage() {
         </div>
       </header>
 
-      <ConnectEvolutionCard />
+      <ConnectPlatformEvolutionCard initial={evolution.platform} />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiStatCard

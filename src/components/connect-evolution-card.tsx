@@ -99,11 +99,24 @@ export function ConnectEvolutionCard({
     return data.results ?? [];
   }, [searchQuery.data]);
 
+  const suggested = React.useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q || hits.length === 0) return null;
+    const exact = hits.find((row) => row.name.toLowerCase() === q);
+    if (exact) return exact;
+    if (hits.length === 1) return hits[0];
+    return null;
+  }, [hits, search]);
+
+  const selected = picked ?? suggested;
+
   const connectMutation = useMutation({
     mutationFn: () => {
-      if (!picked) throw new Error("Elige un negocio.");
+      const row = selected;
+      if (!row) throw new Error("Elige un negocio de la lista.");
+      if (!picked) pickBusiness(row);
       return staffPost<PairingPayload>("connect", {
-        business_id: picked.id,
+        business_id: row.id,
         phone,
         force,
       });
@@ -200,10 +213,22 @@ export function ConnectEvolutionCard({
               <>
                 <Input
                   id="evo-biz-search"
-                  placeholder="Nombre, teléfono o email…"
+                  placeholder="Escribe y pulsa un negocio de la lista"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && suggested) {
+                      e.preventDefault();
+                      pickBusiness(suggested);
+                    }
+                  }}
                 />
+                {search.trim().length >= 2 && hits.length === 0 && !searchQuery.isFetching ? (
+                  <p className="text-muted-foreground text-xs">
+                    No hay negocios con ese nombre. Elige uno de la lista cuando
+                    aparezca.
+                  </p>
+                ) : null}
                 {hits.length > 0 ? (
                   <ul className="divide-y divide-foreground/10 rounded-lg border border-foreground/10">
                     {hits.map((row) => (
@@ -215,7 +240,9 @@ export function ConnectEvolutionCard({
                         >
                           <span className="font-medium">{row.name}</span>
                           <span className="text-muted-foreground ml-2 text-xs">
-                            {[row.phone, row.email].filter(Boolean).join(" · ")}
+                            #{row.id}
+                            {row.phone ? ` · ${row.phone}` : ""}
+                            {row.email ? ` · ${row.email}` : ""}
                           </span>
                         </button>
                       </li>
@@ -250,11 +277,17 @@ export function ConnectEvolutionCard({
 
         <Button
           type="button"
-          disabled={connectMutation.isPending || !picked || !phone.trim()}
+          disabled={connectMutation.isPending || !selected || !phone.trim()}
           onClick={() => connectMutation.mutate()}
         >
           {connectMutation.isPending ? "Preparando…" : "Generar código"}
         </Button>
+        {!businessId && !selected ? (
+          <p className="text-muted-foreground text-xs">
+            Escribe el negocio y haz clic en el resultado. Escribir el nombre no
+            basta.
+          </p>
+        ) : null}
 
         {pairing ? (
           <div className="space-y-3 rounded-lg border border-foreground/10 px-3 py-3">
