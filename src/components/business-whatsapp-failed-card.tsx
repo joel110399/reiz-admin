@@ -16,6 +16,8 @@ import {
 import {
   RetryBusinessButton,
   RetryMessageButton,
+  SkipInvalidBusinessButton,
+  SkipMessageButton,
 } from "@/components/whatsapp-failed-retry";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +30,7 @@ type FailedRow = {
   created_at: string | null;
   status: string;
   can_retry?: boolean;
+  can_skip?: boolean;
 };
 
 type FailedPayload = {
@@ -78,11 +81,14 @@ export function BusinessWhatsAppFailedCard({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {failedCount > 0 ? (
-            <RetryBusinessButton
-              businessId={businessId}
-              failedCount={failedCount}
-              size="sm"
-            />
+            <>
+              <RetryBusinessButton
+                businessId={businessId}
+                failedCount={failedCount}
+                size="sm"
+              />
+              <SkipInvalidBusinessButton businessId={businessId} size="sm" />
+            </>
           ) : null}
           <Link
             href="/dashboard/evolution"
@@ -118,6 +124,12 @@ export function BusinessWhatsAppFailedCard({
                     <Badge variant="destructive">Fallido</Badge>
                     {row.can_retry ? (
                       <RetryMessageButton
+                        logId={row.id}
+                        businessId={businessId}
+                      />
+                    ) : null}
+                    {row.can_skip ? (
+                      <SkipMessageButton
                         logId={row.id}
                         businessId={businessId}
                       />

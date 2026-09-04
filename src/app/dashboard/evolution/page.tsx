@@ -68,7 +68,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ConnectPlatformEvolutionCard } from "@/components/connect-platform-evolution-card";
 import type { PlatformChannel } from "@/components/connect-platform-evolution-card";
-import { RetryBusinessButton, RetryMessageButton } from "@/components/whatsapp-failed-retry";
+import {
+  RetryBusinessButton,
+  RetryMessageButton,
+  SkipInvalidBusinessButton,
+  SkipMessageButton,
+} from "@/components/whatsapp-failed-retry";
 import { cn } from "@/lib/utils";
 import type { Paginated } from "@/types/drf";
 
@@ -87,6 +92,7 @@ type FailureRow = {
   trigger: string;
   provider: string;
   can_retry?: boolean;
+  can_skip?: boolean;
   /** "lost" = recordatorio que se pasó de hora sin salir, no un fallo del proveedor. */
   kind?: string;
 };
@@ -97,6 +103,7 @@ type MessageRow = FailureRow & {
   status: MessageStatus;
   direction: string;
   can_retry?: boolean;
+  can_skip?: boolean;
 };
 
 type MessagesPayload = Paginated<MessageRow> & {
@@ -757,11 +764,21 @@ export default function EvolutionOpsPage() {
                               {fail.error_message}
                             </p>
                           </div>
-                          {row.business_id && fail.can_retry ? (
-                            <RetryMessageButton
-                              logId={fail.id}
-                              businessId={row.business_id}
-                            />
+                          {row.business_id && (fail.can_retry || fail.can_skip) ? (
+                            <div className="flex flex-wrap items-center gap-1">
+                              {fail.can_retry ? (
+                                <RetryMessageButton
+                                  logId={fail.id}
+                                  businessId={row.business_id}
+                                />
+                              ) : null}
+                              {fail.can_skip ? (
+                                <SkipMessageButton
+                                  logId={fail.id}
+                                  businessId={row.business_id}
+                                />
+                              ) : null}
+                            </div>
                           ) : null}
                         </li>
                       ))}
@@ -779,10 +796,14 @@ export default function EvolutionOpsPage() {
                     </ul>
                   ) : null}
                   {row.business_id && row.failed_24h > 0 ? (
-                    <div className="border-t border-destructive/10 px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-1.5 border-t border-destructive/10 px-3 py-2">
                       <RetryBusinessButton
                         businessId={row.business_id}
                         failedCount={row.failed_24h}
+                        hours={24}
+                      />
+                      <SkipInvalidBusinessButton
+                        businessId={row.business_id}
                         hours={24}
                       />
                     </div>
@@ -1760,10 +1781,13 @@ function InstanceMessages({
           Mensajes
         </p>
         {counts.failed > 0 || failedCount > 0 ? (
-          <RetryBusinessButton
-            businessId={businessId}
-            failedCount={counts.failed || failedCount}
-          />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <RetryBusinessButton
+              businessId={businessId}
+              failedCount={counts.failed || failedCount}
+            />
+            <SkipInvalidBusinessButton businessId={businessId} />
+          </div>
         ) : null}
       </div>
       <div className="flex flex-wrap gap-1.5">
@@ -1828,11 +1852,21 @@ function InstanceMessages({
                         ? "Sin enviar"
                         : LOG_STATUS_LABEL[row.status]}
                     </Badge>
-                    {row.status === "failed" && row.can_retry ? (
-                      <RetryMessageButton
-                        logId={row.id}
-                        businessId={businessId}
-                      />
+                    {row.status === "failed" && (row.can_retry || row.can_skip) ? (
+                      <>
+                        {row.can_retry ? (
+                          <RetryMessageButton
+                            logId={row.id}
+                            businessId={businessId}
+                          />
+                        ) : null}
+                        {row.can_skip ? (
+                          <SkipMessageButton
+                            logId={row.id}
+                            businessId={businessId}
+                          />
+                        ) : null}
+                      </>
                     ) : null}
                   </div>
                 </div>
