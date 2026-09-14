@@ -22,6 +22,8 @@ export type RetryBusinessResult = {
   skipped: number;
   remaining: number;
   detail: string;
+  kind?: "failed" | "skipped";
+  stopped_reason?: string;
 };
 
 export type SkipBusinessResult = {
@@ -68,14 +70,15 @@ export function useRetryFailedMessage(businessId?: number) {
 export function useRetryFailedBusiness(businessId: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (hours?: number) =>
+    mutationFn: (opts?: { hours?: number; kind?: "failed" | "skipped" }) =>
       apiJson<RetryBusinessResult>(
         "/api/notifications/staff/evolution-ops/messages/retry-business/",
         {
           method: "POST",
           body: JSON.stringify({
             business_id: businessId,
-            ...(hours ? { hours } : {}),
+            ...(opts?.hours ? { hours: opts.hours } : {}),
+            ...(opts?.kind ? { kind: opts.kind } : {}),
           }),
         }
       ),
@@ -249,9 +252,85 @@ export function RetryBusinessButton({
         size={size}
         disabled={retry.isPending}
         onClick={() =>
-          retry.mutate(hours, {
+          retry.mutate(hours ? { hours } : undefined, {
             onSuccess: () => setConfirm(false),
           })
+        }
+      >
+        <RotateCcw className="size-3" />
+        {retry.isPending ? "Reenviando…" : "Sí, reenviar"}
+      </Button>
+    </div>
+  );
+}
+
+export function RetrySkippedBusinessButton({
+  businessId,
+  skippedCount,
+  hours,
+  size = "xs",
+  variant = "outline",
+}: {
+  businessId: number;
+  skippedCount?: number;
+  hours?: number;
+  size?: "xs" | "sm";
+  variant?: "outline" | "default";
+}) {
+  const retry = useRetryFailedBusiness(businessId);
+  const [confirm, setConfirm] = React.useState(false);
+  const label =
+    skippedCount === 1
+      ? "Reenviar 1 omitido"
+      : skippedCount && skippedCount > 1
+        ? `Reenviar ${skippedCount} omitidos`
+        : "Reenviar omitidos";
+
+  if (!confirm) {
+    return (
+      <Button
+        type="button"
+        size={size}
+        variant={variant}
+        disabled={retry.isPending || skippedCount === 0}
+        onClick={(event) => {
+          event.stopPropagation();
+          setConfirm(true);
+        }}
+      >
+        <RotateCcw className="size-3" />
+        {label}
+      </Button>
+    );
+  }
+
+  return (
+    <div
+      className="flex flex-wrap items-center gap-1.5"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <p className="text-muted-foreground text-xs">
+        Reenvía los omitidos por tope del canal. Si la hora está llena, espera a
+        que haya cupo: no se fuerza el envío.
+      </p>
+      <Button
+        type="button"
+        size={size}
+        variant="outline"
+        disabled={retry.isPending}
+        onClick={() => setConfirm(false)}
+      >
+        Cancelar
+      </Button>
+      <Button
+        type="button"
+        size={size}
+        disabled={retry.isPending}
+        onClick={() =>
+          retry.mutate(
+            { kind: "skipped", ...(hours ? { hours } : {}) },
+            { onSuccess: () => setConfirm(false) }
+          )
         }
       >
         <RotateCcw className="size-3" />

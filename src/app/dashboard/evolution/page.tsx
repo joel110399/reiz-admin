@@ -71,6 +71,7 @@ import type { PlatformChannel } from "@/components/connect-platform-evolution-ca
 import {
   RetryBusinessButton,
   RetryMessageButton,
+  RetrySkippedBusinessButton,
   SkipInvalidBusinessButton,
   SkipMessageButton,
 } from "@/components/whatsapp-failed-retry";
@@ -107,7 +108,13 @@ type MessageRow = FailureRow & {
 };
 
 type MessagesPayload = Paginated<MessageRow> & {
-  counts: { all: number; sent: number; failed: number; skipped: number };
+  counts: {
+    all: number;
+    sent: number;
+    failed: number;
+    skipped: number;
+    retryable_skipped?: number;
+  };
 };
 
 type QuotaInfo = {
@@ -1811,7 +1818,14 @@ function InstanceMessages({
     placeholderData: keepPreviousData,
   });
 
-  const counts = data?.counts ?? { all: 0, sent: 0, failed: 0, skipped: 0 };
+  const counts = data?.counts ?? {
+    all: 0,
+    sent: 0,
+    failed: 0,
+    skipped: 0,
+    retryable_skipped: 0,
+  };
+  const retryableSkipped = counts.retryable_skipped ?? 0;
   const from = data && data.results.length ? (page - 1) * PAGE_SIZE + 1 : 0;
   const to = data ? (page - 1) * PAGE_SIZE + data.results.length : 0;
   const totalPages = data ? Math.max(1, Math.ceil(data.count / PAGE_SIZE)) : 1;
@@ -1828,13 +1842,23 @@ function InstanceMessages({
         <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
           Mensajes
         </p>
-        {counts.failed > 0 || failedCount > 0 ? (
+        {counts.failed > 0 || failedCount > 0 || retryableSkipped > 0 ? (
           <div className="flex flex-wrap items-center gap-1.5">
-            <RetryBusinessButton
-              businessId={businessId}
-              failedCount={counts.failed || failedCount}
-            />
-            <SkipInvalidBusinessButton businessId={businessId} />
+            {counts.failed > 0 || failedCount > 0 ? (
+              <>
+                <RetryBusinessButton
+                  businessId={businessId}
+                  failedCount={counts.failed || failedCount}
+                />
+                <SkipInvalidBusinessButton businessId={businessId} />
+              </>
+            ) : null}
+            {retryableSkipped > 0 ? (
+              <RetrySkippedBusinessButton
+                businessId={businessId}
+                skippedCount={retryableSkipped}
+              />
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -1869,7 +1893,9 @@ function InstanceMessages({
         <p className="text-muted-foreground text-sm">
           {status === "failed"
             ? "No hay envíos fallidos."
-            : "Todavía no hay mensajes para este negocio."}
+            : status === "skipped"
+              ? "No hay envíos omitidos."
+              : "Todavía no hay mensajes para este negocio."}
         </p>
       ) : (
         <>
@@ -1915,6 +1941,11 @@ function InstanceMessages({
                           />
                         ) : null}
                       </>
+                    ) : row.status === "skipped" && row.can_retry ? (
+                      <RetryMessageButton
+                        logId={row.id}
+                        businessId={businessId}
+                      />
                     ) : null}
                   </div>
                 </div>
@@ -1924,12 +1955,14 @@ function InstanceMessages({
                     .join(" · ") || "Sin destinatario"}
                   {row.created_at ? ` · ${fmtWhen(row.created_at)}` : ""}
                 </p>
-                {(row.status === "failed" || row.kind === "lost") &&
+                {(row.status === "failed" ||
+                  row.kind === "lost" ||
+                  (row.status === "skipped" && row.can_retry)) &&
                 row.error_message ? (
                   <p
                     className={cn(
                       "mt-2 text-sm leading-snug",
-                      row.kind === "lost"
+                      row.kind === "lost" || row.status === "skipped"
                         ? "text-amber-700 dark:text-amber-500"
                         : "text-destructive"
                     )}
