@@ -122,6 +122,9 @@ type QuotaInfo = {
   sent_today: number;
   sent_this_hour: number;
   deferred_count?: number;
+  hourly_full?: boolean;
+  daily_full?: boolean;
+  next_available_at?: string | null;
 };
 
 type InstanceRow = {
@@ -276,6 +279,27 @@ function fmtWhen(iso: string | null) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString("es", { dateStyle: "short", timeStyle: "short" });
+}
+
+function fmtClock(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleTimeString("es", { hour: "numeric", minute: "2-digit" });
+}
+
+function fmtRemaining(iso: string, now = Date.now()) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const sec = Math.max(0, Math.round((d.getTime() - now) / 1000));
+  if (sec < 60) return sec <= 1 ? "en 1 segundo" : `en ${sec} segundos`;
+  const minutes = Math.floor(sec / 60);
+  if (minutes < 60) return minutes === 1 ? "en 1 minuto" : `en ${minutes} minutos`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (rest === 0) return hours === 1 ? "en 1 hora" : `en ${hours} horas`;
+  const hourLabel = hours === 1 ? "1 hora" : `${hours} horas`;
+  const minLabel = rest === 1 ? "1 minuto" : `${rest} minutos`;
+  return `en ${hourLabel} y ${minLabel}`;
 }
 
 function fmtAgo(iso: string | null) {
@@ -1540,6 +1564,29 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+function QuotaResumeHint({ quota }: { quota: QuotaInfo }) {
+  const iso = quota.next_available_at ?? null;
+  const hourlyFull = Boolean(quota.hourly_full) || quota.sent_this_hour >= quota.hourly_cap;
+  const dailyFull = Boolean(quota.daily_full) || quota.sent_today >= quota.daily_cap;
+  const [, setTick] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!iso || quota.paused) return undefined;
+    const id = window.setInterval(() => setTick((n) => n + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [iso, quota.paused]);
+
+  if (quota.paused || !iso || (!hourlyFull && !dailyFull)) return null;
+  const remaining = fmtRemaining(iso);
+  const when = fmtClock(iso);
+  const scope = dailyFull ? "del día" : "de esta hora";
+  return (
+    <p className="text-amber-800 dark:text-amber-400 text-xs leading-snug">
+      Tope {scope} lleno. Podrás enviar de nuevo {remaining} ({when}).
+    </p>
+  );
+}
+
 function InstanceLiveDetails({
   row,
   snapshot,
@@ -1650,7 +1697,7 @@ function InstanceLiveDetails({
           <div
             className={cn(
               "space-y-2 rounded-lg border px-3 py-3 text-sm",
-              quota?.paused
+              quota?.paused || quota?.hourly_full || quota?.daily_full
                 ? "border-amber-500/30 bg-amber-500/5"
                 : "border-foreground/10"
             )}
@@ -1673,6 +1720,7 @@ function InstanceLiveDetails({
                       : "Sin rampa"
                   }
                 />
+                <QuotaResumeHint quota={quota} />
                 {quota.paused ? (
                   <>
                     <p className="text-amber-800 dark:text-amber-400 text-xs leading-snug">
