@@ -33,6 +33,48 @@ export function roleLabel(role: string | null | undefined): string {
   return ROLE_LABEL[role] ?? role;
 }
 
+export const BUSINESS_CATEGORIES: { value: string; label: string }[] = [
+  { value: "salon_belleza", label: "Salón" },
+  { value: "barberia", label: "Barbería" },
+  { value: "spa", label: "Spa" },
+  { value: "estetica", label: "Estética" },
+  { value: "uñas", label: "Uñas" },
+  { value: "Makeup", label: "Maquillaje" },
+  { value: "brows_lashes", label: "Cejas y pestañas" },
+  { value: "trenzas", label: "Trenzas" },
+  { value: "dentista", label: "Dentista" },
+  { value: "tatuajes", label: "Tatuajes" },
+  { value: "otros", label: "Otros" },
+];
+
+const BUSINESS_CATEGORY_LABEL: Record<string, string> = {
+  ...Object.fromEntries(BUSINESS_CATEGORIES.map((c) => [c.value, c.label])),
+  other: "Otros",
+  nails: "Uñas",
+  makeup: "Maquillaje",
+};
+
+export function businessCategoryLabel(value: string | null | undefined): string {
+  if (!value) return "—";
+  const trimmed = value.trim();
+  if (!trimmed) return "—";
+  return (
+    BUSINESS_CATEGORY_LABEL[trimmed] ??
+    BUSINESS_CATEGORY_LABEL[trimmed.toLowerCase()] ??
+    trimmed.replace(/_/g, " ")
+  );
+}
+
+export function formatBusinessCategories(category: unknown): string {
+  const values = Array.isArray(category)
+    ? category.map((item) => String(item))
+    : category
+      ? [String(category)]
+      : [];
+  const labels = values.map((value) => businessCategoryLabel(value)).filter((label) => label !== "—");
+  return labels.length > 0 ? labels.join(", ") : "—";
+}
+
 export function timeShort(t: string | undefined | null): string {
   if (!t) return "—";
   return t.length >= 5 ? t.slice(0, 5) : t;

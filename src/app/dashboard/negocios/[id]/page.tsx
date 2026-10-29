@@ -14,8 +14,13 @@ import { ActiveBadge, RoleBadge } from "@/components/status-badge";
 import { GoldieImportPanel } from "@/components/goldie-import-panel";
 import { ServiceCategoryManager } from "@/components/service-category-manager";
 import { AdvancePaymentCard } from "@/components/advance-payment-card";
+import { SubscriptionCard } from "@/components/subscription-card";
 import { BusinessWhatsAppFailedCard } from "@/components/business-whatsapp-failed-card";
 import { ConnectEvolutionCard } from "@/components/connect-evolution-card";
+import {
+  businessCategoryLabel,
+  formatBusinessCategories,
+} from "@/lib/labels";
 import {
   Card,
   CardContent,
@@ -332,9 +337,7 @@ export default function NegocioDetailPage() {
                 <div className="flex justify-between gap-4">
                   <span className="text-muted-foreground">Categoría</span>
                   <span className="max-w-[60%] text-right">
-                    {Array.isArray(biz.category)
-                      ? biz.category.join(", ")
-                      : String(biz.category ?? biz.primary_category ?? "—")}
+                    {formatBusinessCategories(biz.category ?? biz.primary_category)}
                   </span>
                 </div>
                 {biz.primary_category ? (
@@ -342,7 +345,9 @@ export default function NegocioDetailPage() {
                     <span className="text-muted-foreground">
                       Categoría principal
                     </span>
-                    <span className="text-right">{biz.primary_category}</span>
+                    <span className="text-right">
+                      {businessCategoryLabel(biz.primary_category)}
+                    </span>
                   </div>
                 ) : null}
                 <div className="flex justify-between gap-4">
@@ -407,6 +412,8 @@ export default function NegocioDetailPage() {
               </CardContent>
             </Card>
           </div>
+
+          <SubscriptionCard businessId={biz.id} />
 
           <PosEnabledCard id={biz.id} posEnabled={!!biz.pos_enabled} />
 

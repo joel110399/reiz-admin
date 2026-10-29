@@ -29,6 +29,7 @@ import {
 } from "@/components/location-map-picker";
 import { apiJson } from "@/lib/api-client";
 import { fetchAllPages } from "@/lib/drf-helpers";
+import { BUSINESS_CATEGORIES } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 const TEAM_SIZE_OPTIONS = [
@@ -133,7 +134,7 @@ export function CreateBusinessWizard({
 
   const [ownerId, setOwnerId] = React.useState("");
   const [name, setName] = React.useState("");
-  const [categoryStr, setCategoryStr] = React.useState("barberia");
+  const [categories, setCategories] = React.useState<string[]>(["barberia"]);
   const [description, setDescription] = React.useState("");
 
   const [address, setAddress] = React.useState("");
@@ -180,7 +181,7 @@ export function CreateBusinessWizard({
   const createMutation = useMutation({
     mutationFn: async () => {
       const oid = Number(ownerId);
-      const cats = parseCategories(categoryStr);
+      const cats = categories;
       if (!name.trim() || !oid || cats.length === 0) {
         throw new Error("Nombre, dueño y al menos una categoría son obligatorios.");
       }
@@ -275,7 +276,7 @@ export function CreateBusinessWizard({
       return (
         !!ownerId &&
         !!name.trim() &&
-        parseCategories(categoryStr).length > 0
+        categories.length > 0
       );
     }
     if (step === 2) {
@@ -302,7 +303,7 @@ export function CreateBusinessWizard({
     step,
     ownerId,
     name,
-    categoryStr,
+    categories,
     address,
     latitude,
     longitude,
@@ -381,12 +382,39 @@ export function CreateBusinessWizard({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Categorías (separadas por coma)</Label>
-                <Input
-                  value={categoryStr}
-                  onChange={(e) => setCategoryStr(e.target.value)}
-                  placeholder="barberia, estetica"
-                />
+                <Label>Categorías</Label>
+                <p className="text-muted-foreground text-xs">
+                  La primera que marques queda como principal.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {BUSINESS_CATEGORIES.map((category) => {
+                    const selected = categories.includes(category.value);
+                    const order = categories.indexOf(category.value);
+                    return (
+                      <button
+                        key={category.value}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() =>
+                          setCategories((prev) =>
+                            prev.includes(category.value)
+                              ? prev.filter((value) => value !== category.value)
+                              : [...prev, category.value]
+                          )
+                        }
+                        className={cn(
+                          "rounded-full border px-3 py-1.5 text-sm transition",
+                          selected
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-background hover:bg-muted"
+                        )}
+                      >
+                        {category.label}
+                        {selected && order === 0 ? " · principal" : ""}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Descripción</Label>
