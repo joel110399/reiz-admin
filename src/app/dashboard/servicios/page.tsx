@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 import { PaginatedTable } from "@/components/paginated-table";
@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { apiFetch, formatApiErrorBody } from "@/lib/api-client";
 import { fetchAllPages } from "@/lib/drf-helpers";
+import { formatMoney } from "@/lib/format";
 
 type ServiceRow = {
   id: number;
@@ -178,6 +179,7 @@ export default function ServiciosPage() {
   return (
     <>
       <PaginatedTable<ServiceRow>
+      icon={Wrench}
         queryKey="services"
         initialPath="/api/services/"
         title="Servicios"
@@ -208,11 +210,24 @@ export default function ServiciosPage() {
               return String(r.business ?? "");
             },
           },
-          { key: "price", header: "Precio", render: (r) => String(r.price ?? "") },
+          {
+            key: "price",
+            header: "Precio",
+            render: (r) => (
+              <span className="whitespace-nowrap tabular-nums">{formatMoney(r.price)}</span>
+            ),
+            csvValue: (r) => String(r.price ?? ""),
+          },
           {
             key: "duration",
-            header: "Min",
-            render: (r) => String(r.duration_minutes ?? ""),
+            header: "Duración",
+            render: (r) =>
+              r.duration_minutes ? (
+                <span className="whitespace-nowrap">{String(r.duration_minutes)} min</span>
+              ) : (
+                "—"
+              ),
+            csvValue: (r) => String(r.duration_minutes ?? ""),
           },
           {
             key: "category",

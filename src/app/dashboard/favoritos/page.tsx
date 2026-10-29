@@ -1,10 +1,13 @@
 "use client";
 
+import { Heart } from "lucide-react";
 import { PaginatedTable } from "@/components/paginated-table";
+import { formatDateTime } from "@/lib/format";
 
 export default function FavoritosPage() {
   return (
     <PaginatedTable
+      icon={Heart}
       queryKey="favorites"
       initialPath="/api/businesses/favorites/"
       title="Favoritos"
@@ -30,7 +33,7 @@ export default function FavoritosPage() {
         {
           key: "created",
           header: "Creado",
-          render: (r) => String(r.created_at ?? "").slice(0, 19),
+          render: (r) => formatDateTime(r.created_at as string | undefined),
         },
       ]}
     />

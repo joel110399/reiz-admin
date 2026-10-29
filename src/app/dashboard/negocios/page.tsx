@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Eye, Pencil, Plus } from "lucide-react";
+import { Building2, Eye, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { CreateBusinessWizard } from "@/components/create-business-wizard";
@@ -37,6 +37,11 @@ type BizRow = {
   name: string;
   slug?: string | null;
   owner: number;
+  owner_detail?: {
+    email?: string;
+    first_name?: string;
+    last_name?: string;
+  } | null;
   is_active: boolean;
   phone?: string | null;
   email?: string | null;
@@ -96,6 +101,7 @@ export default function NegociosPage() {
   return (
     <>
       <PaginatedTable<BizRow>
+      icon={Building2}
         queryKey="businesses"
         initialPath="/api/businesses/"
         paginationStyle="limit"
@@ -111,13 +117,36 @@ export default function NegociosPage() {
         }
         columns={[
           { key: "id", header: "ID", render: (r) => String(r.id) },
-          { key: "name", header: "Nombre", render: (r) => String(r.name ?? "") },
           {
-            key: "slug",
-            header: "Slug",
-            render: (r) => String(r.slug ?? "—"),
+            key: "name",
+            header: "Negocio",
+            render: (r) => (
+              <div className="min-w-0">
+                <p className="truncate font-medium">{r.name}</p>
+                {r.slug ? (
+                  <p className="text-muted-foreground truncate text-xs">/{r.slug}</p>
+                ) : null}
+              </div>
+            ),
+            csvValue: (r) => r.name,
           },
-          { key: "owner", header: "Owner ID", render: (r) => String(r.owner ?? "") },
+          {
+            key: "owner",
+            header: "Dueño",
+            render: (r) => {
+              const o = r.owner_detail;
+              const name = [o?.first_name, o?.last_name].filter(Boolean).join(" ");
+              return (
+                <div className="min-w-0">
+                  <p className="truncate">{name || `Usuario #${r.owner}`}</p>
+                  {o?.email ? (
+                    <p className="text-muted-foreground truncate text-xs">{o.email}</p>
+                  ) : null}
+                </div>
+              );
+            },
+            csvValue: (r) => r.owner_detail?.email ?? String(r.owner),
+          },
           {
             key: "is_active",
             header: "Activo",

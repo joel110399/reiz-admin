@@ -1,11 +1,14 @@
 "use client";
 
+import { Bell } from "lucide-react";
 import { PaginatedTable } from "@/components/paginated-table";
 import { ActiveBadge } from "@/components/status-badge";
+import { formatDateTime } from "@/lib/format";
 
 export default function NotificacionesPage() {
   return (
     <PaginatedTable
+      icon={Bell}
       queryKey="notifications"
       initialPath="/api/notifications/notifications/"
       title="Notificaciones in-app"
@@ -35,7 +38,7 @@ export default function NotificacionesPage() {
         {
           key: "created",
           header: "Creada",
-          render: (r) => String(r.created_at ?? "").slice(0, 19),
+          render: (r) => formatDateTime(r.created_at as string | undefined),
         },
       ]}
     />

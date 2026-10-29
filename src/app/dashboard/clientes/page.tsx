@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eye, Pencil, Plus, Trash2 } from "lucide-react";
+import { Eye, Pencil, Plus, Trash2, UserCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { ClientMergeButton } from "@/components/client-merge-dialog";
@@ -134,6 +134,7 @@ export default function ClientesPage() {
   return (
     <>
       <PaginatedTable<ClientRow>
+      icon={UserCircle2}
         queryKey="clients"
         initialPath="/api/bookings/clients/"
         title="Clientes"

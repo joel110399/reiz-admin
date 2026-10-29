@@ -84,10 +84,10 @@ export default function BuscarPage() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
       <header className="space-y-2">
-        <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
+        <p className="text-primary-strong text-sm font-semibold">
           Mesa de soporte
         </p>
-        <h1 className="font-heading text-3xl font-semibold tracking-tight">
+        <h1 className="font-heading text-[2rem] leading-tight font-semibold tracking-[-0.03em]">
           Resolver un caso
         </h1>
         <p className="text-muted-foreground max-w-2xl text-sm leading-relaxed">

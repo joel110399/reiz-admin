@@ -3,7 +3,14 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Download, Search } from "lucide-react";
+import {
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Inbox,
+  Search,
+} from "lucide-react";
 
 import {
   Table,
@@ -13,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -201,9 +209,13 @@ export function PaginatedTable<T extends Record<string, unknown>>({
   defaultPageSize = 20,
   exportFileName,
   enableExport = true,
+  icon,
+  headingLevel = 1,
 }: {
   title: string;
   description?: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  headingLevel?: 1 | 2;
   queryKey: string;
   initialPath: string;
   columns: PaginatedColumn<T>[];
@@ -316,20 +328,40 @@ export function PaginatedTable<T extends Record<string, unknown>>({
     [data, debouncedSearch, extraQuery, initialPath, pageSize, paginationStyle]
   );
 
+  const header = (
+    <PageHeader
+      title={title}
+      description={description}
+      icon={icon}
+      level={headingLevel}
+    />
+  );
+
   if (isLoading && !data) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-64 max-w-full" />
-        <Skeleton className="h-12 w-full max-w-xl" />
-        <Skeleton className="h-96 w-full rounded-xl" />
+      <div className="space-y-6">
+        {header}
+        <div className="space-y-3" aria-busy="true">
+          <Skeleton className="h-10 w-full max-w-sm" />
+          <Skeleton className="h-96 w-full rounded-xl" />
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="text-destructive border-destructive/30 rounded-xl border p-4 text-sm">
-        {error instanceof Error ? error.message : "Error"}
+      <div className="space-y-6">
+        {header}
+        <div className="border-destructive/30 bg-destructive/5 flex items-start gap-3 rounded-xl border p-4 text-sm">
+          <AlertCircle className="text-destructive mt-0.5 size-4 shrink-0" />
+          <div>
+            <p className="font-medium">No se pudo cargar la lista</p>
+            <p className="text-muted-foreground mt-0.5">
+              {error instanceof Error ? error.message : "Error desconocido"}
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -350,20 +382,9 @@ export function PaginatedTable<T extends Record<string, unknown>>({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight md:text-3xl">
-            {title}
-          </h1>
-          {description ? (
-            <p className="text-muted-foreground mt-1 max-w-2xl text-sm leading-relaxed">
-              {description}
-            </p>
-          ) : null}
-        </div>
-      </div>
+      {header}
 
-      <Card className="overflow-hidden py-0 shadow-none ring-1 ring-foreground/10">
+      <Card className="overflow-hidden py-0 shadow-none ring-1 ring-black/[0.06] dark:ring-white/[0.08]">
         {filters ? (
           <div className="border-border border-b px-4 py-4 md:px-6">
             <h2 className="mb-3 text-sm font-semibold tracking-tight">Filtros</h2>
@@ -371,7 +392,7 @@ export function PaginatedTable<T extends Record<string, unknown>>({
           </div>
         ) : null}
 
-        <CardHeader className="border-border flex-col gap-4 space-y-0 border-b px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
+        <CardHeader className="border-border flex flex-col gap-4 space-y-0 border-b px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
           <div className="flex w-full min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
             {showSearch ? (
               <div className="relative max-w-md flex-1">
@@ -430,7 +451,7 @@ export function PaginatedTable<T extends Record<string, unknown>>({
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/50 hover:bg-muted/50 border-b-0">
+              <TableRow className="bg-muted/40 hover:bg-muted/40 border-b-0">
                 {columns.map((c) => (
                   <TableHead
                     key={c.key}
@@ -451,9 +472,19 @@ export function PaginatedTable<T extends Record<string, unknown>>({
                 <TableRow>
                   <TableCell
                     colSpan={colCount}
-                    className="text-muted-foreground h-32 text-center"
+                    className="text-muted-foreground h-40 text-center"
                   >
-                    Sin resultados
+                    <div className="flex flex-col items-center gap-2">
+                      <Inbox className="text-muted-foreground/60 size-8" />
+                      <p className="text-foreground text-sm font-medium">
+                        {debouncedSearch.trim()
+                          ? `Nada coincide con «${debouncedSearch.trim()}»`
+                          : "Todavía no hay registros"}
+                      </p>
+                      {debouncedSearch.trim() ? (
+                        <p className="text-xs">Prueba con otro nombre, correo o ID.</p>
+                      ) : null}
+                    </div>
                   </TableCell>
                 </TableRow>
               )}

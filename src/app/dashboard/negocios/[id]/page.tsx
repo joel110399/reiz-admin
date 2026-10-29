@@ -2,12 +2,15 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { Mail } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { DetailPageHeader } from "@/components/detail-page-header";
-import { ActiveBadge } from "@/components/status-badge";
+import { buttonVariants } from "@/components/ui/button";
+import { DetailPageSkeleton } from "@/components/detail-page-skeleton";
+import { ActiveBadge, RoleBadge } from "@/components/status-badge";
 import { GoldieImportPanel } from "@/components/goldie-import-panel";
 import { ServiceCategoryManager } from "@/components/service-category-manager";
 import { AdvancePaymentCard } from "@/components/advance-payment-card";
@@ -33,6 +36,7 @@ import { Button } from "@/components/ui/button";
 import { apiJson, apiFetch, formatApiErrorBody } from "@/lib/api-client";
 import { fetchAllPages } from "@/lib/drf-helpers";
 import { pushRecentCase } from "@/lib/recent-cases";
+import { formatDateTime } from "@/lib/format";
 
 type OwnerDetail = {
   id: number;
@@ -242,6 +246,16 @@ export default function NegocioDetailPage() {
     );
   }, [reviews]);
 
+  React.useEffect(() => {
+    if (!biz) return;
+    pushRecentCase({
+      kind: "business",
+      id: biz.id,
+      label: biz.name,
+      href: `/dashboard/negocios/${biz.id}`,
+    });
+  }, [biz]);
+
   if (!id) {
     return (
       <p className="text-muted-foreground text-sm">ID de negocio no válido.</p>
@@ -249,9 +263,7 @@ export default function NegocioDetailPage() {
   }
 
   if (isLoading) {
-    return (
-      <p className="text-muted-foreground text-sm">Cargando negocio…</p>
-    );
+    return <DetailPageSkeleton />;
   }
 
   if (error || !biz) {
@@ -272,14 +284,6 @@ export default function NegocioDetailPage() {
   const stats = biz.reviews_stats;
   const owner = biz.owner_detail;
 
-  React.useEffect(() => {
-    pushRecentCase({
-      kind: "business",
-      id: biz.id,
-      label: biz.name,
-      href: `/dashboard/negocios/${biz.id}`,
-    });
-  }, [biz]);
 
   return (
     <>
@@ -287,7 +291,20 @@ export default function NegocioDetailPage() {
         backHref="/dashboard/negocios"
         title={biz.name}
         description={`#${biz.id}${biz.slug ? ` · ${biz.slug}` : ""}${typeof biz.is_open_now === "boolean" ? ` · ${biz.is_open_now ? "Abierto ahora" : "Cerrado ahora"}` : ""}`}
-        actions={<ActiveBadge active={!!biz.is_active} />}
+        actions={
+          <>
+            <ActiveBadge active={!!biz.is_active} />
+            {owner?.email ? (
+              <Link
+                href={`/dashboard/correos?user=${owner.id}`}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                <Mail />
+                Correo al dueño
+              </Link>
+            ) : null}
+          </>
+        }
       />
 
       <Tabs defaultValue="resumen" className="w-full">
@@ -373,7 +390,7 @@ export default function NegocioDetailPage() {
                     </div>
                     <div className="flex justify-between gap-4">
                       <span className="text-muted-foreground">Rol</span>
-                      <span>{owner.role ?? "—"}</span>
+                      <RoleBadge role={owner.role ?? ""} />
                     </div>
                   </>
                 ) : (
@@ -741,7 +758,7 @@ export default function NegocioDetailPage() {
                           {r.id}
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-xs">
-                          {r.created_at?.slice(0, 19) ?? "—"}
+                          {formatDateTime(r.created_at)}
                         </TableCell>
                         <TableCell>{r.rating}</TableCell>
                         <TableCell>{r.is_verified ? "Sí" : "No"}</TableCell>
@@ -781,8 +798,8 @@ export default function NegocioDetailPage() {
       </Tabs>
 
       <p className="text-muted-foreground mt-6 text-xs">
-        Creado: {biz.created_at?.slice(0, 19) ?? "—"} · Actualizado:{" "}
-        {biz.updated_at?.slice(0, 19) ?? "—"}
+        Creado: {formatDateTime(biz.created_at)} · Actualizado:{" "}
+        {formatDateTime(biz.updated_at)}
       </p>
     </>
   );

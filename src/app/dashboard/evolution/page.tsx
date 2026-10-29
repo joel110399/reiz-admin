@@ -138,6 +138,10 @@ type InstanceRow = {
   business_id: number | null;
   business_name: string;
   owner_email: string;
+  plan: string;
+  plan_name: string;
+  plan_status: string;
+  has_plan: boolean;
   instance: string;
   phone: string;
   profile_name: string;
@@ -392,6 +396,7 @@ export default function EvolutionOpsPage() {
   // filter
   const [filterSearch, setFilterSearch] = React.useState("");
   const [filterState, setFilterState] = React.useState<"all" | "healthy" | "error">("all");
+  const [filterPlan, setFilterPlan] = React.useState<"all" | "with" | "without">("all");
 
   function openInstance(row: InstanceRow, filter: MessageFilter = "all") {
     setOpenFilter(filter);
@@ -618,6 +623,10 @@ export default function EvolutionOpsPage() {
   const metrics = digitalocean.metrics;
   const cpuRows = chartRows(digitalocean.series.cpu);
   const memRows = chartRows(digitalocean.series.memory);
+  const linkedInstances = evolution.instances.filter(
+    (row) => row.business_id && row.connect_status === "connected"
+  );
+  const withPlanCount = linkedInstances.filter((row) => row.has_plan).length;
   const failedInstances = evolution.instances.filter(
     (row) => row.failed_24h + (row.lost_24h ?? 0) > 0,
   );
@@ -630,10 +639,10 @@ export default function EvolutionOpsPage() {
     <div className="space-y-8">
       <header className="flex flex-col gap-4 border-b border-foreground/10 pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
-          <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
+          <p className="text-primary-strong text-sm font-semibold">
             Infraestructura
           </p>
-          <h1 className="font-heading text-3xl font-semibold tracking-tight">
+          <h1 className="font-heading text-[2rem] leading-tight font-semibold tracking-[-0.03em]">
             WhatsApp Evolution
           </h1>
           <p className="text-muted-foreground max-w-2xl text-sm leading-relaxed">
@@ -856,6 +865,15 @@ export default function EvolutionOpsPage() {
                 una fila para ver todos los mensajes; en Fallos 24 h ves el motivo.
                 Las huérfanas existen en el servidor y no en un negocio.
               </CardDescription>
+              <div className="mt-3 flex flex-wrap gap-2 text-sm">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
+                  <CheckCircle2 className="size-3.5" />
+                  {withPlanCount} conectados con plan
+                </span>
+                <span className="bg-muted text-muted-foreground inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-medium">
+                  {linkedInstances.length - withPlanCount} conectados sin plan
+                </span>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Input
@@ -875,6 +893,18 @@ export default function EvolutionOpsPage() {
                   {f === "all" ? "Todas" : f === "healthy" ? "Sanas" : "Con error"}
                 </Button>
               ))}
+              <span className="bg-border mx-1 hidden w-px sm:block" aria-hidden />
+              {(["all", "with", "without"] as const).map((f) => (
+                <Button
+                  key={`plan-${f}`}
+                  type="button"
+                  size="sm"
+                  variant={filterPlan === f ? "default" : "outline"}
+                  onClick={() => setFilterPlan(f)}
+                >
+                  {f === "all" ? "Cualquier plan" : f === "with" ? "Con plan" : "Sin plan"}
+                </Button>
+              ))}
             </div>
           </div>
         </CardHeader>
@@ -888,6 +918,7 @@ export default function EvolutionOpsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Negocio</TableHead>
+                  <TableHead>Plan</TableHead>
                   <TableHead>Instancia</TableHead>
                   <TableHead>Número</TableHead>
                   <TableHead>Reiz</TableHead>
@@ -911,6 +942,8 @@ export default function EvolutionOpsPage() {
                         !(row.owner_email || "").toLowerCase().includes(q)
                       ) return false;
                     }
+                    if (filterPlan === "with" && !row.has_plan) return false;
+                    if (filterPlan === "without" && (row.has_plan || !row.business_id)) return false;
                     if (filterState === "healthy") return row.healthy;
                     if (filterState === "error") return !row.healthy;
                     return true;
@@ -942,6 +975,9 @@ export default function EvolutionOpsPage() {
                       ) : (
                         <span className="text-muted-foreground">Sin negocio</span>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      {row.business_id ? <PlanBadge row={row} /> : "—"}
                     </TableCell>
                     <TableCell className="font-mono text-xs">
                       {row.instance || "—"}
@@ -1558,6 +1594,38 @@ export default function EvolutionOpsPage() {
           ) : null}
         </SheetContent>
       </Sheet>
+    </div>
+  );
+}
+
+const PLAN_STATUS_NOTE: Record<string, string> = {
+  trialing: "En prueba",
+  past_due: "Pago fallido",
+  grace_period: "En gracia",
+  suspended: "Suspendida",
+};
+
+function PlanBadge({ row }: { row: InstanceRow }) {
+  const note = PLAN_STATUS_NOTE[row.plan_status];
+  if (row.has_plan) {
+    return (
+      <div className="min-w-28">
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
+          <CheckCircle2 className="size-3" />
+          {row.plan_name}
+        </span>
+        {note ? <p className="text-destructive mt-0.5 text-[11px]">{note}</p> : null}
+      </div>
+    );
+  }
+  return (
+    <div className="min-w-28">
+      <Badge variant="secondary">Sin plan</Badge>
+      {note ? (
+        <p className="text-muted-foreground mt-0.5 text-[11px]">
+          {row.plan === "free" ? note : `${note} · ${row.plan_name}`}
+        </p>
+      ) : null}
     </div>
   );
 }

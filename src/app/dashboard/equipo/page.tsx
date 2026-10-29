@@ -1,11 +1,13 @@
 "use client";
 
+import { Briefcase } from "lucide-react";
 import { PaginatedTable } from "@/components/paginated-table";
 import { ActiveBadge } from "@/components/status-badge";
 
 export default function EquipoPage() {
   return (
     <PaginatedTable
+      icon={Briefcase}
       queryKey="team-members"
       initialPath="/api/businesses/team-members/"
       title="Miembros de equipo"

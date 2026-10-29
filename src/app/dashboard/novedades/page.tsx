@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Eye, Sparkles } from "lucide-react";
 
+import { PageHeader } from "@/components/page-header";
 import { apiJson } from "@/lib/api-client";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -52,13 +53,11 @@ export default function NovedadesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Novedades</h1>
-        <p className="text-muted-foreground text-sm">
-          Avisos al abrir la app del negocio. Actívalos, míralos y elige quién
-          los ve.
-        </p>
-      </div>
+      <PageHeader
+        icon={Sparkles}
+        title="Novedades"
+        description="Avisos al abrir la app del negocio. Actívalos, míralos y elige quién los ve."
+      />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>

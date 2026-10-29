@@ -45,16 +45,20 @@ export default function LoginPage() {
       </div>
       <div className="w-full max-w-[420px]">
         <div className="mb-8 flex flex-col items-center text-center">
-          <ReizMark className="mb-4 size-11 text-base" />
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            Reiz Admin
+          <ReizMark className="mb-5 size-12 rounded-xl" />
+          <span className="border-primary/15 bg-accent text-accent-foreground mb-4 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[13px] font-medium">
+            <span className="bg-brand size-1.5 rounded-full" />
+            Equipo interno
+          </span>
+          <h1 className="font-heading text-[2rem] leading-tight font-semibold tracking-[-0.035em]">
+            Reiz <span className="text-muted-foreground font-normal">Admin</span>
           </h1>
           <p className="text-muted-foreground mt-1.5 max-w-sm text-sm leading-relaxed">
             Acceso del equipo interno para resolver reservas, negocios y
             cuentas.
           </p>
         </div>
-        <div className="bg-card ring-foreground/8 rounded-2xl p-6 shadow-sm ring-1">
+        <div className="bg-card rounded-[1.5rem] p-6 shadow-[0_20px_40px_-24px_rgb(0_0_0/0.25)] ring-1 ring-black/[0.06] sm:p-7 dark:ring-white/[0.08]">
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
             <div className="space-y-2">
               <Label htmlFor="user">Usuario</Label>
@@ -81,13 +85,13 @@ export default function LoginPage() {
                 className="h-10"
               />
             </div>
-            <Button type="submit" className="mt-1 h-10 w-full" disabled={pending}>
+            <Button type="submit" size="lg" className="mt-2 w-full" disabled={pending}>
               {pending ? "Entrando…" : "Entrar al panel"}
             </Button>
           </form>
         </div>
         <p className="text-muted-foreground mt-6 text-center text-xs">
-          Solo cuentas Django con permiso de staff.
+          Solo cuentas con permiso de staff.
         </p>
       </div>
     </div>

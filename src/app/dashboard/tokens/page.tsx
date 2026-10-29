@@ -1,11 +1,13 @@
 "use client";
 
+import { Smartphone } from "lucide-react";
 import { PaginatedTable } from "@/components/paginated-table";
 import { ActiveBadge } from "@/components/status-badge";
 
 export default function TokensPage() {
   return (
     <PaginatedTable
+      icon={Smartphone}
       queryKey="device-tokens"
       initialPath="/api/notifications/device-tokens/"
       title="Device tokens (push)"

@@ -2,6 +2,7 @@ export const BOOKING_STATUSES = [
   "pending",
   "confirmed",
   "completed",
+  "no_show",
   "cancelled",
 ] as const;
 
@@ -11,6 +12,7 @@ export const BOOKING_STATUS_LABEL: Record<string, string> = {
   pending: "Pendiente",
   confirmed: "Confirmada",
   completed: "Completada",
+  no_show: "No se presentó",
   cancelled: "Cancelada",
 };
 

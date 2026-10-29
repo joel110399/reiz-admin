@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Pencil } from "lucide-react";
+import { Pencil, Star } from "lucide-react";
 import { toast } from "sonner";
 
 import { PaginatedTable } from "@/components/paginated-table";
@@ -74,6 +74,7 @@ export default function ResenasPage() {
   return (
     <>
       <PaginatedTable<ReviewRow>
+      icon={Star}
         queryKey="reviews"
         initialPath="/api/reviews/"
         title="Reseñas"

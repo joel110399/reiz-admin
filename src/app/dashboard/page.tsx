@@ -24,7 +24,7 @@ import {
 import { KpiStatCard } from "@/components/dashboard/kpi-stat-card";
 import { BookingStatusBadge } from "@/components/status-badge";
 import { apiJson } from "@/lib/api-client";
-import { timeShort } from "@/lib/labels";
+import { timeShort, bookingStatusLabel } from "@/lib/labels";
 import type { Paginated } from "@/types/drf";
 import {
   Card,
@@ -65,12 +65,6 @@ const STATUS_ORDER = [
   "cancelled",
 ] as const;
 
-const STATUS_LABEL: Record<string, string> = {
-  pending: "Pendiente",
-  confirmed: "Confirmada",
-  completed: "Completada",
-  cancelled: "Cancelada",
-};
 
 type QueueBooking = {
   id: number;
@@ -160,7 +154,7 @@ export default function DashboardPage() {
     const total = entries.reduce((s, [, n]) => s + n, 0);
     return ordered.map(([status, value], i) => ({
       status,
-      name: STATUS_LABEL[status] ?? status,
+      name: bookingStatusLabel(status),
       value,
       pct: total > 0 ? Math.round((value / total) * 1000) / 10 : 0,
       fill: CHART_COLORS[i % CHART_COLORS.length],
@@ -196,7 +190,7 @@ export default function DashboardPage() {
 
   if (error || !data) {
     return (
-      <Card className="ring-1 ring-foreground/10">
+      <Card className="ring-1 ring-black/[0.06] dark:ring-white/[0.08]">
         <CardHeader>
           <CardTitle>No se pudieron cargar las métricas</CardTitle>
           <CardDescription>
@@ -211,15 +205,15 @@ export default function DashboardPage() {
     <div className="space-y-8">
       <header className="flex flex-col gap-4 border-b border-foreground/10 pb-8 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
-          <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
+          <p className="text-primary-strong text-sm font-semibold">
             Panel de control
           </p>
-          <h1 className="font-heading text-3xl font-semibold tracking-tight md:text-4xl">
+          <h1 className="font-heading text-[2rem] leading-tight font-semibold tracking-[-0.03em] md:text-4xl">
             Resumen operativo
           </h1>
           <p className="text-muted-foreground max-w-2xl text-sm leading-relaxed">
             Vista unificada del ecosistema Reiz: cuentas, negocios, citas y
-            reputación. Datos en tiempo real desde el backend Django.
+            reputación. Datos al momento de abrir la página.
           </p>
         </div>
         <div className="text-muted-foreground flex flex-col items-start gap-1 text-right text-xs sm:items-end">
@@ -292,7 +286,7 @@ export default function DashboardPage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2 ring-1 ring-foreground/10 shadow-none">
+        <Card className="lg:col-span-2 ring-1 ring-black/[0.06] dark:ring-white/[0.08] shadow-none">
           <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0">
             <div>
               <CardTitle className="font-heading text-lg">
@@ -354,12 +348,12 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="ring-1 ring-foreground/10 shadow-none">
+        <Card className="ring-1 ring-black/[0.06] dark:ring-white/[0.08] shadow-none">
           <CardHeader>
             <CardTitle className="font-heading text-lg">
               Reservas por estado
             </CardTitle>
-            <CardDescription>Distribución global en base</CardDescription>
+            <CardDescription>Todas las reservas del sistema</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
             <ChartContainer
@@ -414,7 +408,7 @@ export default function DashboardPage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">
-        <Card className="shadow-none ring-1 ring-foreground/10 lg:col-span-2">
+        <Card className="shadow-none ring-1 ring-black/[0.06] dark:ring-white/[0.08] lg:col-span-2">
           <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0">
             <div>
               <CardTitle className="font-heading text-lg">
@@ -477,7 +471,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-none ring-1 ring-foreground/10">
+        <Card className="shadow-none ring-1 ring-black/[0.06] dark:ring-white/[0.08]">
           <CardHeader className="pb-3">
             <CardTitle className="font-heading text-base">
               Atajos de soporte

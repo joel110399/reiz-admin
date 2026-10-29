@@ -19,6 +19,7 @@ import { apiJson } from "@/lib/api-client";
 import { timeShort } from "@/lib/labels";
 import { pushRecentCase } from "@/lib/recent-cases";
 import * as React from "react";
+import { formatDateTime } from "@/lib/format";
 
 type BookingDetail = {
   id: number;
@@ -204,8 +205,8 @@ export default function ReservaDetailPage() {
               <span>{b.is_walk_in ? "Sí" : "No"}</span>
             </div>
             <p className="text-muted-foreground text-xs">
-              Creado: {b.created_at?.slice(0, 19) ?? "—"} · Actualizado:{" "}
-              {b.updated_at?.slice(0, 19) ?? "—"}
+              Creado: {formatDateTime(b.created_at)} · Actualizado:{" "}
+              {formatDateTime(b.updated_at)}
             </p>
           </CardContent>
         </Card>

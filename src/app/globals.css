@@ -35,6 +35,8 @@
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-brand: var(--brand);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -53,80 +55,85 @@
 }
 
 :root {
-  --background: oklch(0.975 0.008 85);
-  --foreground: oklch(0.2 0.02 250);
-  --card: oklch(0.995 0.003 85);
-  --card-foreground: oklch(0.2 0.02 250);
-  --popover: oklch(0.995 0.003 85);
-  --popover-foreground: oklch(0.2 0.02 250);
-  --primary: oklch(0.48 0.1 220);
-  --primary-foreground: oklch(0.99 0.01 210);
-  --secondary: oklch(0.95 0.012 85);
-  --secondary-foreground: oklch(0.24 0.02 250);
-  --muted: oklch(0.95 0.01 85);
-  --muted-foreground: oklch(0.5 0.02 250);
-  --accent: oklch(0.94 0.02 210);
-  --accent-foreground: oklch(0.28 0.04 220);
-  --destructive: oklch(0.577 0.215 25);
-  --border: oklch(0.9 0.012 85);
-  --input: oklch(0.9 0.012 85);
-  --ring: oklch(0.55 0.09 220);
-  --chart-1: oklch(0.55 0.12 220);
-  --chart-2: oklch(0.7 0.14 70);
-  --chart-3: oklch(0.62 0.14 155);
-  --chart-4: oklch(0.62 0.18 25);
-  --chart-5: oklch(0.55 0.14 300);
-  --success: oklch(0.62 0.14 155);
-  --success-foreground: oklch(0.98 0.02 155);
-  --warning: oklch(0.75 0.14 70);
-  --warning-foreground: oklch(0.28 0.06 70);
+  /* Misma paleta que el landing de reiz-web (tailwind.config.ts → reiz.*). */
+  --background: #f6f7f9;
+  --foreground: #141414;
+  --card: #ffffff;
+  --card-foreground: #141414;
+  --popover: #ffffff;
+  --popover-foreground: #141414;
+  --primary: #0574b5;
+  --primary-foreground: #ffffff;
+  --primary-strong: #003c73;
+  --brand: #0082cd;
+  --secondary: #f1f3f5;
+  --secondary-foreground: #141414;
+  --muted: #f1f3f5;
+  --muted-foreground: #545454;
+  --accent: #e3f6ff;
+  --accent-foreground: #003c73;
+  --destructive: #d92d20;
+  --border: rgb(20 20 20 / 0.08);
+  --input: rgb(20 20 20 / 0.12);
+  --ring: #0082cd;
+  --chart-1: #0082cd;
+  --chart-2: #f7bf29;
+  --chart-3: #1b7947;
+  --chart-4: #e5484d;
+  --chart-5: #7c5cff;
+  --success: #1b7947;
+  --success-foreground: #ffffff;
+  --warning: #f7bf29;
+  --warning-foreground: #3d2c00;
   --radius: 0.75rem;
-  --sidebar: oklch(0.205 0.028 250);
-  --sidebar-foreground: oklch(0.96 0.01 85);
-  --sidebar-primary: oklch(0.72 0.1 210);
-  --sidebar-primary-foreground: oklch(0.16 0.03 250);
-  --sidebar-accent: oklch(0.28 0.03 250);
-  --sidebar-accent-foreground: oklch(0.98 0.01 85);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.7 0.1 210);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #141414;
+  --sidebar-primary: #141414;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgb(20 20 20 / 0.045);
+  --sidebar-accent-foreground: #141414;
+  --sidebar-border: rgb(20 20 20 / 0.06);
+  --sidebar-ring: #0082cd;
 }
 
 .dark {
-  --background: oklch(0.16 0.02 250);
-  --foreground: oklch(0.97 0.01 85);
-  --card: oklch(0.205 0.022 250);
-  --card-foreground: oklch(0.97 0.01 85);
-  --popover: oklch(0.205 0.022 250);
-  --popover-foreground: oklch(0.97 0.01 85);
-  --primary: oklch(0.74 0.1 210);
-  --primary-foreground: oklch(0.16 0.03 250);
-  --secondary: oklch(0.26 0.025 250);
-  --secondary-foreground: oklch(0.96 0.01 85);
-  --muted: oklch(0.26 0.025 250);
-  --muted-foreground: oklch(0.72 0.02 230);
-  --accent: oklch(0.28 0.035 220);
-  --accent-foreground: oklch(0.92 0.03 210);
-  --destructive: oklch(0.7 0.17 22);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.7 0.1 210);
-  --chart-1: oklch(0.72 0.12 210);
-  --chart-2: oklch(0.78 0.14 75);
-  --chart-3: oklch(0.7 0.14 155);
-  --chart-4: oklch(0.68 0.16 25);
-  --chart-5: oklch(0.7 0.14 300);
-  --success: oklch(0.72 0.14 155);
-  --success-foreground: oklch(0.18 0.04 155);
-  --warning: oklch(0.8 0.14 75);
-  --warning-foreground: oklch(0.22 0.05 75);
-  --sidebar: oklch(0.135 0.022 250);
-  --sidebar-foreground: oklch(0.96 0.01 85);
-  --sidebar-primary: oklch(0.74 0.1 210);
-  --sidebar-primary-foreground: oklch(0.14 0.03 250);
-  --sidebar-accent: oklch(0.22 0.03 250);
-  --sidebar-accent-foreground: oklch(0.98 0.01 85);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.7 0.1 210);
+  --background: #0b0f19;
+  --foreground: #f8fafc;
+  --card: #0f172a;
+  --card-foreground: #f8fafc;
+  --popover: #111a2e;
+  --popover-foreground: #f8fafc;
+  --primary: #4bb9ff;
+  --primary-foreground: #04121f;
+  --primary-strong: #8bd7ff;
+  --brand: #38bdf8;
+  --secondary: #172033;
+  --secondary-foreground: #f8fafc;
+  --muted: #172033;
+  --muted-foreground: #94a3b8;
+  --accent: rgb(56 189 248 / 0.12);
+  --accent-foreground: #8bd7ff;
+  --destructive: #f97066;
+  --border: rgb(255 255 255 / 0.08);
+  --input: rgb(255 255 255 / 0.12);
+  --ring: #38bdf8;
+  --chart-1: #38bdf8;
+  --chart-2: #f7bf29;
+  --chart-3: #3ccb7f;
+  --chart-4: #f97066;
+  --chart-5: #a78bfa;
+  --success: #3ccb7f;
+  --success-foreground: #04140b;
+  --warning: #f7bf29;
+  --warning-foreground: #241a00;
+  --sidebar: #0b0f19;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #f8fafc;
+  --sidebar-primary-foreground: #0b0f19;
+  --sidebar-accent: rgb(255 255 255 / 0.06);
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: rgb(255 255 255 / 0.06);
+  --sidebar-ring: #38bdf8;
 }
 
 @layer base {
@@ -135,18 +142,28 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01";
+  }
+  /* Titulares apretados como en el landing. */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.025em;
   }
 }
 
 @layer utilities {
+  /* Brillo del hero del landing: azul Reiz arriba a la derecha, dorado a la izquierda. */
   .admin-canvas {
     background-image:
-      radial-gradient(ellipse 80% 50% at 0% -10%, oklch(0.72 0.1 210 / 0.08), transparent 50%),
-      radial-gradient(ellipse 60% 40% at 100% 0%, oklch(0.75 0.12 75 / 0.06), transparent 45%);
+      radial-gradient(60% 60% at 70% 0%, rgb(0 130 205 / 0.1), transparent 70%),
+      radial-gradient(40% 40% at 5% 0%, rgb(247 191 41 / 0.08), transparent 70%);
+    background-repeat: no-repeat;
+    background-size: 100% 640px;
   }
   .dark .admin-canvas {
     background-image:
-      radial-gradient(ellipse 80% 50% at 0% -10%, oklch(0.72 0.1 210 / 0.12), transparent 50%),
-      radial-gradient(ellipse 60% 40% at 100% 0%, oklch(0.7 0.1 250 / 0.1), transparent 45%);
+      radial-gradient(60% 60% at 70% 0%, rgb(56 189 248 / 0.12), transparent 70%),
+      radial-gradient(40% 40% at 5% 0%, rgb(247 191 41 / 0.05), transparent 70%);
   }
 }

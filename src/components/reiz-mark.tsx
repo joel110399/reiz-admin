@@ -1,15 +1,14 @@
 import { cn } from "@/lib/utils";
 
+/** Icono RZ de Reiz (el mismo de la app y del landing). */
 export function ReizMark({ className }: { className?: string }) {
   return (
-    <span
-      className={cn(
-        "bg-primary text-primary-foreground inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-sm font-semibold tracking-tight shadow-sm",
-        className
-      )}
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/reiz-mark.png"
+      alt=""
       aria-hidden
-    >
-      R
-    </span>
+      className={cn("size-8 shrink-0 rounded-lg object-cover", className)}
+    />
   );
 }

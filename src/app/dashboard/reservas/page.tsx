@@ -4,7 +4,7 @@ import * as React from "react";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus } from "lucide-react";
+import { CalendarDays, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { BookingEditForm } from "@/components/booking-edit-form";
@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { apiFetch, apiJson, formatApiErrorBody } from "@/lib/api-client";
 import { fetchAllPages } from "@/lib/drf-helpers";
+import { formatDate } from "@/lib/format";
 import { BOOKING_STATUSES, bookingStatusLabel, timeShort } from "@/lib/labels";
 import type { Paginated } from "@/types/drf";
 
@@ -43,6 +44,8 @@ type BookingRow = {
   business: number | { id: number; name?: string };
   client?: number | { id: number; name?: string } | null;
   service?: number | null;
+  business_detail?: { name?: string } | null;
+  client_detail?: { name?: string } | null;
 };
 
 type Opt = { id: number; name: string; email?: string | null; phone?: string | null };
@@ -153,6 +156,7 @@ function ReservasPageInner() {
   return (
     <>
       <PaginatedTable<BookingRow>
+      icon={CalendarDays}
         queryKey="bookings"
         initialPath="/api/bookings/"
         title="Reservas"
@@ -173,6 +177,12 @@ function ReservasPageInner() {
             <Select
               value={statusFilter}
               onValueChange={(v) => setStatusFilter(v ?? "all")}
+              items={{
+                all: "Todos",
+                ...Object.fromEntries(
+                  BOOKING_STATUSES.map((st) => [st, bookingStatusLabel(st)])
+                ),
+              }}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -190,7 +200,16 @@ function ReservasPageInner() {
         }
         columns={[
           { key: "id", header: "ID", render: (r) => String(r.id) },
-          { key: "date", header: "Fecha", render: (r) => String(r.date ?? "") },
+          {
+            key: "date",
+            header: "Fecha",
+            render: (r) => (
+              <span className="whitespace-nowrap">
+                {r.date ? formatDate(`${String(r.date)}T00:00:00`) : "—"}
+              </span>
+            ),
+            csvValue: (r) => String(r.date ?? ""),
+          },
           {
             key: "time",
             header: "Horario",
@@ -205,18 +224,20 @@ function ReservasPageInner() {
           {
             key: "business",
             header: "Negocio",
-            render: (r) =>
-              typeof r.business === "object" && r.business && "name" in r.business
-                ? String((r.business as { name?: string }).name)
-                : String(r.business ?? ""),
+            render: (r) => {
+              const d = r.business_detail;
+              return d?.name ?? `#${typeof r.business === "object" ? r.business.id : r.business}`;
+            },
           },
           {
             key: "client",
             header: "Cliente",
-            render: (r) =>
-              r.client && typeof r.client === "object" && "name" in r.client
-                ? String((r.client as { name?: string }).name)
-                : String(r.client ?? "—"),
+            render: (r) => {
+              const d = r.client_detail;
+              if (d?.name) return d.name;
+              if (!r.client) return "Sin cliente";
+              return `#${typeof r.client === "object" ? r.client.id : r.client}`;
+            },
           },
         ]}
         renderRowActions={(row) => (

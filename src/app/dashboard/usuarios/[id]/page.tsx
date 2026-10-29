@@ -5,7 +5,11 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
+import { Mail } from "lucide-react";
+
 import { DetailPageHeader } from "@/components/detail-page-header";
+import { buttonVariants } from "@/components/ui/button";
+import { DetailPageSkeleton } from "@/components/detail-page-skeleton";
 import { ActiveBadge, RoleBadge } from "@/components/status-badge";
 import {
   Card,
@@ -15,6 +19,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { apiJson } from "@/lib/api-client";
+import { formatDateTime } from "@/lib/format";
 import { fetchAllPages } from "@/lib/drf-helpers";
 import { pushRecentCase } from "@/lib/recent-cases";
 
@@ -53,6 +58,17 @@ export default function UsuarioDetailPage() {
     enabled: !!id && !!user && user.role === "business",
   });
 
+  React.useEffect(() => {
+    if (!user) return;
+    const name = [user.first_name, user.last_name].filter(Boolean).join(" ");
+    pushRecentCase({
+      kind: "user",
+      id: user.id,
+      label: name || user.email || user.username,
+      href: `/dashboard/usuarios/${user.id}`,
+    });
+  }, [user]);
+
   if (!id) {
     return (
       <p className="text-muted-foreground text-sm">ID de usuario no válido.</p>
@@ -60,9 +76,7 @@ export default function UsuarioDetailPage() {
   }
 
   if (isLoading) {
-    return (
-      <p className="text-muted-foreground text-sm">Cargando usuario…</p>
-    );
+    return <DetailPageSkeleton />;
   }
 
   if (error || !user) {
@@ -82,32 +96,34 @@ export default function UsuarioDetailPage() {
 
   const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ");
 
-  React.useEffect(() => {
-    pushRecentCase({
-      kind: "user",
-      id: user.id,
-      label: fullName || user.email || user.username,
-      href: `/dashboard/usuarios/${user.id}`,
-    });
-  }, [fullName, user]);
-
   return (
     <>
-        <DetailPageHeader
-          backHref="/dashboard/usuarios"
-          title={fullName || user.username || user.email}
-          description={`#${user.id} · ${user.email}`}
-        />
+      <DetailPageHeader
+        backHref="/dashboard/usuarios"
+        title={fullName || user.username || user.email}
+        description={`#${user.id} · ${user.email}`}
+        actions={
+          user.email ? (
+            <Link
+              href={`/dashboard/correos?user=${user.id}`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Mail />
+              Enviar correo
+            </Link>
+          ) : null
+        }
+      />
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Cuenta</CardTitle>
-            <CardDescription>Datos del modelo User</CardDescription>
+            <CardDescription>Datos de acceso y estado de la cuenta</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2 text-sm">
             <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Username</span>
+              <span className="text-muted-foreground">Usuario</span>
               <span>{user.username}</span>
             </div>
             <div className="flex justify-between gap-4">
@@ -133,13 +149,7 @@ export default function UsuarioDetailPage() {
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">Alta</span>
               <span className="text-xs">
-                {user.date_joined?.slice(0, 19) ?? "—"}
-              </span>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">created_at</span>
-              <span className="text-xs">
-                {user.created_at?.slice(0, 19) ?? "—"}
+                {formatDateTime(user.date_joined)}
               </span>
             </div>
           </CardContent>
@@ -149,7 +159,7 @@ export default function UsuarioDetailPage() {
           <CardHeader>
             <CardTitle>Negocios como dueño</CardTitle>
             <CardDescription>
-              Solo si el rol es «business»; enlaces al detalle admin
+              Pulsa un negocio para abrir su ficha
             </CardDescription>
           </CardHeader>
           <CardContent>

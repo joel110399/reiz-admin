@@ -10,6 +10,7 @@ import {
   Heart,
   LayoutDashboard,
   LogOut,
+  Mail,
   MessageCircle,
   Search,
   Smartphone,
@@ -89,6 +90,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: "Comunicación",
     items: [
       { href: "/dashboard/novedades", label: "Novedades", icon: Sparkles },
+      { href: "/dashboard/correos", label: "Correos", icon: Mail },
       { href: "/dashboard/notificaciones", label: "Notificaciones", icon: Bell },
       { href: "/dashboard/evolution", label: "WhatsApp", icon: MessageCircle },
     ],
@@ -127,14 +129,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon">
-        <SidebarHeader className="border-b border-sidebar-border">
+        <SidebarHeader className="h-16 justify-center">
           <div className="flex items-center gap-2.5 px-2 py-1.5">
             <ReizMark className="size-8" />
             <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-              <p className="truncate text-sm font-semibold tracking-tight">
-                Reiz Admin
+              <p className="truncate text-[15px] font-semibold tracking-tight">
+                Reiz{" "}
+                <span className="text-sidebar-foreground/60 font-normal">Admin</span>
               </p>
-              <p className="text-sidebar-foreground/55 truncate text-[11px]">
+              <p className="text-sidebar-foreground/50 truncate text-[11px]">
                 Operaciones internas
               </p>
             </div>
@@ -212,7 +215,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <SidebarRail />
       </Sidebar>
       <SidebarInset>
-        <header className="bg-background/80 supports-backdrop-filter:bg-background/60 sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b px-4 backdrop-blur-md">
+        <header className="bg-card/85 supports-backdrop-filter:bg-card/70 sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 border-b px-4 backdrop-blur-md md:px-6">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-1 h-4" />
           <div className="hidden min-w-0 flex-1 md:block">
@@ -226,7 +229,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             onClick={() => setOpen(true)}
             className={cn(
               buttonVariants({ variant: "outline", size: "sm" }),
-              "text-muted-foreground hidden h-9 max-w-sm flex-1 justify-start gap-2 px-3 font-normal md:inline-flex"
+              "text-muted-foreground hidden h-10 max-w-sm flex-1 justify-start gap-2 px-4 font-normal md:inline-flex"
             )}
           >
             <Search className="size-3.5" />
@@ -246,7 +249,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </Button>
           <ThemeToggle />
         </header>
-        <div className="admin-canvas flex flex-1 flex-col gap-4 p-4 md:p-6">
+        <div className="admin-canvas flex flex-1 flex-col gap-4 p-4 md:p-8">
           {children}
         </div>
       </SidebarInset>

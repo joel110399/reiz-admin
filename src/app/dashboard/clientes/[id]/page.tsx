@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ClientMergeButton } from "@/components/client-merge-dialog";
 import { DetailPageHeader } from "@/components/detail-page-header";
+import { DetailPageSkeleton } from "@/components/detail-page-skeleton";
 import { BookingStatusBadge } from "@/components/status-badge";
 import {
   Card,
@@ -27,6 +28,7 @@ import { apiJson } from "@/lib/api-client";
 import { pushRecentCase } from "@/lib/recent-cases";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { formatDateTime } from "@/lib/format";
 
 type ClientDetail = {
   id: number;
@@ -92,6 +94,16 @@ export default function ClienteDetailPage() {
     });
   }, [bookings]);
 
+  React.useEffect(() => {
+    if (!client) return;
+    pushRecentCase({
+      kind: "client",
+      id: client.id,
+      label: client.name,
+      href: `/dashboard/clientes/${client.id}`,
+    });
+  }, [client]);
+
   if (!id) {
     return (
       <p className="text-muted-foreground text-sm">ID de cliente no válido.</p>
@@ -99,9 +111,7 @@ export default function ClienteDetailPage() {
   }
 
   if (isLoading) {
-    return (
-      <p className="text-muted-foreground text-sm">Cargando cliente…</p>
-    );
+    return <DetailPageSkeleton />;
   }
 
   if (error || !client) {
@@ -121,14 +131,6 @@ export default function ClienteDetailPage() {
 
   const bid = client.business;
 
-  React.useEffect(() => {
-    pushRecentCase({
-      kind: "client",
-      id: client.id,
-      label: client.name,
-      href: `/dashboard/clientes/${client.id}`,
-    });
-  }, [client]);
 
   return (
     <>
@@ -183,8 +185,8 @@ export default function ClienteDetailPage() {
               </div>
             ) : null}
             <div className="text-muted-foreground mt-2 text-xs">
-              Creado: {client.created_at?.slice(0, 19) ?? "—"} · Actualizado:{" "}
-              {client.updated_at?.slice(0, 19) ?? "—"}
+              Creado: {formatDateTime(client.created_at)} · Actualizado:{" "}
+              {formatDateTime(client.updated_at)}
             </div>
           </CardContent>
         </Card>
